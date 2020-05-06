@@ -1,0 +1,5 @@
+Release
+Debug
+*.o
+*.d
+mplayer-mini

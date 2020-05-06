@@ -1,0 +1,5 @@
+*.[od]
+*.ho
+codec-cfg
+codecs.conf.h
+mplayer

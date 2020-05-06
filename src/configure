@@ -1,0 +1,973 @@
+#! /bin/sh
+#
+# Original version (C) 2000 Pontscho/fresh!mindworkz
+#                      pontscho@makacs.poliod.hu
+#
+# History / Contributors: Check the Subversion log.
+#
+# Cleanups all over the place (c) 2001 pl
+#
+#
+# This configure script is *not* autoconf-based and has different semantics.
+# It attempts to autodetect all settings and options where possible. It is
+# possible to override autodetection with the --enable-option/--disable-option
+# command line parameters.  --enable-option forces the option on skipping
+# autodetection. Yes, this means that compilation may fail and yes, this is not
+# how autoconf-based configure scripts behave.
+#
+# configure generates a series of configuration files:
+#  - config.h contains #defines that are used in the C code.
+#  - config.mak is included from the Makefiles.
+#
+# If you want to add a new check for $feature, look at the existing checks
+# and try to use helper functions where you can.
+#
+# Furthermore you need to add the variable _feature to the list of default
+# settings and set it to one of yes/no/auto. Also add appropriate
+# --enable-feature/--disable-feature command line options.
+# The results of the check should be written to config.h and config.mak
+# at the end of this script. The variable names used for this should be
+# uniform, i.e. if the option is named 'feature':
+#
+# _feature     : should have a value of yes/no/auto
+# def_feature  : '#define ... 1' or '#undef ...' for conditional compilation
+# ld_feature   : '-L/path/dir -lfeature' GCC options
+#
+#############################################################################
+
+# Prevent locale nonsense from breaking basic text processing utilities
+export LC_ALL=C
+
+# Store the configure line that was used
+configuration="$*"
+
+# utility functions
+tolower() {
+  tr '[A-Z]' '[a-z]'
+}
+
+toupper() {
+  tr '[a-z]' '[A-Z]'
+}
+
+# Prefer these macros to full length text !
+# These macros only return an error code - NO display is done
+compile_check() {
+  source="$1"
+  shift
+  echo >> "$TMPLOG"
+  cat "$source" >> "$TMPLOG"
+  echo >> "$TMPLOG"
+  echo "$_cc $WARNFLAGS $WARN_CFLAGS $CFLAGS $source $extra_cflags $ld_static $extra_ldflags $libs_mplayer -o $TMPEXE $@ $libm" >> "$TMPLOG"
+  rm -f "$TMPEXE"
+  $_cc $WARNFLAGS $WARN_CFLAGS $CFLAGS "$source" $extra_cflags $ld_static $extra_ldflags $libs_mplayer -o "$TMPEXE" "$@" $libm >> "$TMPLOG" 2>&1
+  TMPRES="$?"
+  echo >> "$TMPLOG"
+  echo >> "$TMPLOG"
+  return "$TMPRES"
+}
+
+cc_check() {
+  compile_check $TMPC $@
+}
+
+cxx_check() {
+  compile_check $TMPCPP $@ -lstdc++
+}
+
+cpp_condition_check() {
+  inc=""
+  if test -n "$1" ; then
+    inc="#include <$1>"
+  fi
+  cat > $TMPC << EOF
+$inc
+#if !($2)
+#error condition not true: $2
+#endif
+int main(void) { return 0; }
+EOF
+  shift 2
+  compile_check $TMPC $@
+}
+
+cflag_check() {
+  cat > $TMPC << EOF
+int main(void) { return 0; }
+EOF
+  compile_check $TMPC $@
+}
+
+header_check() {
+  cat > $TMPC << EOF
+#include <$1>
+int main(void) { return 0; }
+EOF
+  shift
+  compile_check $TMPC $@
+}
+
+return_check() {
+  cat > $TMPC << EOF
+#include <$1>
+int main(void) { return $2; }
+EOF
+  shift 2
+  compile_check $TMPC $@
+}
+
+statement_check() {
+  cat > $TMPC << EOF
+#include <$1>
+int main(void) { $2; return 0; }
+EOF
+  shift
+  shift
+  compile_check $TMPC $@
+}
+
+define_statement_check() {
+  cat > $TMPC << EOF
+#define $1
+#include <$2>
+int main(void) { $3; return 0; }
+EOF
+  shift 3
+  compile_check $TMPC $@
+}
+
+return_statement_check() {
+  cat > $TMPC << EOF
+#include <$1>
+int main(void) { $2; return $3; }
+EOF
+  shift 3
+  compile_check $TMPC $@
+}
+
+inline_asm_check() {
+  cat > $TMPC << EOF
+int main(void) { __asm__ volatile ($1); return 0; }
+EOF
+  shift
+  compile_check $TMPC $@
+}
+
+# The following checks are special and should only be used with broken and
+# non-self-sufficient headers that do not include all of their dependencies.
+
+header_check_broken() {
+  cat > $TMPC << EOF
+#include <$1>
+#include <$2>
+int main(void) { return 0; }
+EOF
+  shift
+  shift
+  compile_check $TMPC $@
+}
+
+statement_check_broken() {
+  cat > $TMPC << EOF
+#include <$1>
+#include <$2>
+int main(void) { $3; return 0; }
+EOF
+  shift 3
+  compile_check $TMPC $@
+}
+
+tmp_run() {
+  "$TMPEXE" >> "$TMPLOG" 2>&1
+}
+
+# Display error message, flush temporary file, exit.
+die () {
+  echo
+  echo "Error: $@" >&2
+  echo >&2
+  rm -f "$TMPEXE" "$TMPC" "$TMPS" "$TMPCPP"
+  echo "Check \"$TMPLOG\" if you do not understand why it failed."
+  exit 1
+}
+
+# OS test booleans functions
+issystem() {
+  test "$(echo $system_name | tolower)" = "$(echo $1 | tolower)"
+}
+linux()     { issystem "Linux"; }
+
+arm() {
+  case "$host_arch" in
+    arm*|aarch64*) return 0;;
+    *) return 1;;
+  esac
+}
+
+# Use this before starting a check
+echocheck() {
+  echo "============ Checking for $@ ============" >> "$TMPLOG"
+  echo ${_echo_n} "Checking for $@ ... ${_echo_c}"
+}
+
+# Use this to echo the results of a check
+echores() {
+  if test "$res_comment" ; then
+    res_comment="($res_comment)"
+  fi
+  echo "Result is: $@ $res_comment" >> "$TMPLOG"
+  echo "##########################################" >> "$TMPLOG"
+  echo "" >> "$TMPLOG"
+  echo "$@ $res_comment"
+  res_comment=""
+}
+#############################################################################
+
+# Check how echo works in this /bin/sh
+case $(echo -n) in
+  -n)   _echo_n=        _echo_c='\c'    ;;      # SysV echo
+  *)    _echo_n='-n '   _echo_c=        ;;      # BSD echo
+esac
+
+show_help(){
+cat << EOF
+Usage: $0 [OPTIONS]...
+
+Configuration:
+  -h, --help             display this help and exit
+
+Installation directories:
+  --prefix=DIR           prefix directory for installation [/usr/local]
+  --bindir=DIR           directory for installing binaries [PREFIX/bin]
+  --datadir=DIR          directory for installing machine independent
+                         data files (skins, etc) [PREFIX/share/mplayer]
+  --mandir=DIR           directory for installing man pages [PREFIX/share/man]
+  --confdir=DIR          directory for installing configuration files
+                         [PREFIX/etc/mplayer]
+  --libdir=DIR           directory for object code libraries [PREFIX/lib]
+
+Miscellaneous options:
+  --cc=COMPILER          C compiler to build MPlayer [gcc]
+  --host-cc=COMPILER     C compiler for tools needed while building [gcc]
+  --as=ASSEMBLER         assembler to build MPlayer [as]
+  --nm=NM                nm tool to build MPlayer [nm]
+  --ar=AR                librarian to build MPlayer [ar]
+  --ranlib=RANLIB        ranlib to build MPlayer [ranlib]
+  --target=PLATFORM      target platform (i386-linux, arm-linux, etc)
+  --with-install=PATH    path to a custom install program
+
+  --enable-debug[=1-3]      compile-in debugging information [disable]
+  --enable-profile          compile-in profiling information [disable]
+  --disable-sighandler      disable sighandler for crashes [enable]
+  --enable-crash-debug      enable automatic gdb attach on crash [disable]
+
+Use these options if autodetection fails:
+  --extra-cflags=FLAGS        extra CFLAGS
+  --extra-ldflags=FLAGS       extra LDFLAGS
+  --extra-libs=FLAGS          extra linker flags
+
+  --with-freetype-config=PATH path to freetype-config
+
+EOF
+exit 0
+} #show_help()
+
+_install=install
+_ranlib=ranlib
+_cc=cc
+_ar=ar
+_arflags=rc
+# create thin archive to save disk space and I/O
+$_ar 2>&1 | grep -q "\[T\] " && _arflags=rcT
+test "$CC" && _cc="$CC"
+_as=auto
+_nm=auto
+_cross_compile=auto
+_prefix="/usr/local"
+_iconv=auto
+_alsa=auto
+_freetype=auto
+_fontconfig=auto
+_freetypeconfig='pkg-config freetype2'
+type freetype-config >/dev/null 2>&1 && _freetypeconfig=freetype-config
+_pthreads=auto
+_mpg123=auto
+_termcap=auto
+
+option_value(){
+  echo $(echo $* | cut -d '=' -f 2-)
+}
+
+option_value_uc(){
+  echo $(option_value $1 | toupper)
+}
+
+for ac_option do
+  case "$ac_option" in
+  --help|-help|-h)
+    show_help
+    ;;
+  --prefix=*)
+    _prefix=$(option_value $ac_option)
+    ;;
+  --bindir=*)
+    _bindir=$(option_value $ac_option)
+    ;;
+  --datadir=*)
+    _datadir=$(option_value $ac_option)
+    ;;
+  --mandir=*)
+    _mandir=$(option_value $ac_option)
+    ;;
+  --confdir=*)
+    _confdir=$(option_value $ac_option)
+    ;;
+  --libdir=*)
+    _libdir=$(option_value $ac_option)
+    ;;
+  --codecsdir=*)
+    _codecsdir=$(option_value $ac_option)
+    ;;
+
+  --with-install=*)
+    _install=$(option_value $ac_option)
+    ;;
+
+  --with-freetype-config=*)
+    _freetypeconfig=$(option_value $ac_option)
+    ;;
+
+  --extra-cflags=*)
+    extra_cflags=$(option_value $ac_option)
+    ;;
+  --extra-ldflags=*)
+    extra_ldflags=$(option_value $ac_option)
+    ;;
+  --extra-libs=*)
+    extra_libs=$(option_value $ac_option)
+    ;;
+
+  --target=*)
+    _target=$(option_value $ac_option)
+    ;;
+  --cc=*)
+    _cc=$(option_value $ac_option)
+    ;;
+  --host-cc=*)
+    _host_cc=$(option_value $ac_option)
+    ;;
+  --as=*)
+    _as=$(option_value $ac_option)
+    ;;
+  --nm=*)
+    _nm=$(option_value $ac_option)
+    ;;
+  --ar=*)
+    _ar=$(option_value $ac_option)
+    ;;
+  --ranlib=*)
+    _ranlib=$(option_value $ac_option)
+    ;;
+  --charset=*)
+    _charset=$(option_value $ac_option)
+    ;;
+  --enable-profile)
+    _profile='-p'
+    ;;
+  --disable-profile)
+    _profile=
+    ;;
+  --enable-debug)
+    _debug='-g'
+    ;;
+  --enable-debug=*)
+    _debug=$(echo $_echo_n '-g'$_echo_c; option_value $ac_option)
+    ;;
+  --disable-debug)
+    _debug=
+    ;;
+
+  *)
+    echo "Unknown parameter: $ac_option"
+    exit 1
+    ;;
+
+  esac
+done
+
+# Atmos: moved this here, to be correct, if --prefix is specified
+test -z "$_bindir"  && _bindir="$_prefix/bin"
+test -z "$_datadir" && _datadir="$_prefix/share/mplayer"
+test -z "$_mandir"  && _mandir="$_prefix/share/man"
+test -z "$_confdir" && _confdir="$_prefix/etc/mplayer"
+test -z "$_libdir"  && _libdir="$_prefix/lib"
+
+for tmpdir in "$TMPDIR" "$TEMPDIR" "/tmp" ; do
+  test "$tmpdir" && break
+done
+
+mplayer_tmpdir="$tmpdir/mplayer-configure-$RANDOM-$$"
+mkdir $mplayer_tmpdir || die "Unable to create tmpdir."
+
+cleanup() {
+  rm -rf "$mplayer_tmpdir"
+}
+
+trap cleanup EXIT
+
+TMPLOG="config.log"
+TMPC="$mplayer_tmpdir/tmp.c"
+TMPCPP="$mplayer_tmpdir/tmp.cpp"
+TMPH="$mplayer_tmpdir/tmp.h"
+TMPS="$mplayer_tmpdir/tmp.S"
+# We will update this later once we know the executable suffix
+TMPEXE="$mplayer_tmpdir/tmp"
+
+rm -f "$TMPLOG"
+echo configuration: $configuration > "$TMPLOG"
+echo >> "$TMPLOG"
+
+
+# Checking CC version...
+  for _cc in "$_cc" gcc cc ; do
+    cc_name_tmp=$($_cc -v 2>&1 | tail -n 1 | cut -d ' ' -f 1)
+    if test "$cc_name_tmp" = "gcc"; then
+      cc_name=$cc_name_tmp
+      echocheck "$_cc version"
+      cc_vendor=gnu
+      cc_version=$($_cc -dumpversion 2>&1)
+      case $cc_version in
+        2.96*)
+          cc_fail=yes
+          ;;
+        *)
+          _cc_major=$(echo $cc_version | cut -d '.' -f 1)
+          _cc_minor=$(echo $cc_version | cut -d '.' -f 2)
+          _cc_mini=$(echo $cc_version | cut -d '.' -f 3)
+          ;;
+      esac
+      echores "$cc_version"
+      break
+    fi
+    if $_cc -v 2>&1 | grep -q "clang"; then
+      echocheck "$_cc version"
+      cc_vendor=clang
+      cc_version=$($_cc -dumpversion 2>&1)
+      res_comment="experimental support only"
+      echores "clang $cc_version"
+      break
+    fi
+    cc_name_tmp=$($_cc -V 2>&1 | head -n 1 | cut -d ' ' -f 2,3)
+    if test "$cc_name_tmp" = "Sun C"; then
+      echocheck "$_cc version"
+      cc_vendor=sun
+      cc_version=$($_cc -V 2>&1 | head -n 1 | cut -d ' ' -f 4)
+      res_comment="experimental support only"
+      echores "Sun C $cc_version"
+      break
+    fi
+  done
+test "$cc_fail" = yes && die "unsupported compiler version"
+
+# Determine our OS name and CPU architecture
+if test -z "$_target" ; then
+  # OS name
+  system_name=$(uname -s 2>&1)
+  case "$system_name" in
+  Linux|FreeBSD|NetBSD|OpenBSD|DragonFly|BSD/OS|Darwin|SunOS|QNX|GNU|MorphOS|AIX|AmigaOS|Haiku)
+    ;;
+  *)
+    system_name="$system_name-UNKNOWN"
+    ;;
+  esac
+  cpp_condition_check '' 'defined(__MINGW32__)' && system_name=MINGW32
+
+
+  # host's CPU/instruction set
+  set_host_arch() {
+  case "$1" in
+      arm*|zaurus|cats) host_arch=arm ;;
+      *) host_arch=UNKNOWN ;;
+  esac
+  }
+  set_host_arch "$(uname -m 2>&1)"
+  if test "$host_arch" = UNKNOWN ; then
+    set_host_arch "$(uname -p 2>&1)"
+  fi
+else # if test -z "$_target"
+  for component in 3 2; do
+    system_name=$(echo $_target | cut -d '-' -f $component)
+    case "$(echo $system_name | tolower)" in
+      linux) system_name=Linux ;;
+    esac
+  done
+  # We need to convert underscores so that values like k6-2 and pentium-mmx can be passed
+  host_arch=$(echo $_target | cut -d '-' -f 1)
+  if test $(echo $host_arch) != "x86_64" ; then
+    host_arch=$(echo $host_arch | tr '_' '-')
+  fi
+fi
+
+
+echocheck "working compiler"
+cflag_check "" || die "Compiler is not functioning correctly. Check your installation and custom CFLAGS $CFLAGS ."
+echo "yes"
+
+cflag_check "-lm" && libm="-lm"
+
+#if test -z "$_target" ; then
+#  cat > $TMPC << EOF
+#int main(void) {
+#    int test[(int)sizeof(char *)-7];
+#    return 0;
+#}
+#EOF
+
+echo "Detected operating system: $system_name"
+echo "Detected host architecture: $host_arch"
+
+echocheck "cross compilation"
+if test $_cross_compile = auto ; then
+  _cross_compile=yes
+  cflag_check "" && "$TMPEXE" 2> /dev/null && _cross_compile=no
+fi
+echores $_cross_compile
+
+if test $_cross_compile = yes; then
+  tmp_run() {
+    return 0
+  }
+  test "$_host_cc" || _host_cc=cc
+fi
+
+echocheck "host cc"
+test "$_host_cc" || _host_cc=$_cc
+echores $_host_cc
+
+
+CFLAGS="-D_ISOC99_SOURCE -I. $CFLAGS"
+HOSTCFLAGS="-D_ISOC99_SOURCE -I. -O3"
+
+# On glibc, add some more CPPFLAGS for enabling required functionality.
+cpp_condition_check features.h "defined __GLIBC__" &&
+  CFLAGS="-D_POSIX_C_SOURCE=200112 -D_XOPEN_SOURCE=600 $CFLAGS" &&
+  HOSTCFLAGS="-D_POSIX_C_SOURCE=200112 -D_XOPEN_SOURCE=600 $HOSTCFLAGS"
+
+if cygwin; then
+  CFLAGS="-D_XOPEN_SOURCE=600 $CFLAGS"
+fi
+
+if test "$cc_vendor" = "gnu" ; then
+  cflag_check -fno-tree-vectorize && CFLAGS="$CFLAGS -fno-tree-vectorize"
+  cflag_check -Wundef && WARNFLAGS="-Wundef $WARNFLAGS"
+  cflag_check -std=gnu99 && WARN_CFLAGS="-std=gnu99 $WARN_CFLAGS"
+  cflag_check -Wdeclaration-after-statement && WARN_CFLAGS="-Wdeclaration-after-statement $WARN_CFLAGS"
+  cflag_check -Wno-pointer-sign && WARN_CFLAGS="-Wno-pointer-sign $WARN_CFLAGS"
+  cflag_check -Wdisabled-optimization && WARN_CFLAGS="-Wdisabled-optimization $WARN_CFLAGS"
+  cflag_check -Wmissing-prototypes && WARN_CFLAGS="-Wmissing-prototypes $WARN_CFLAGS"
+  cflag_check -Wstrict-prototypes && WARN_CFLAGS="-Wstrict-prototypes $WARN_CFLAGS"
+fi
+
+# This provides significant size savings on gcc.
+# I will cause worse backtraces when debug info is missing though,
+# but having non-stripable debug info is not really a desirable feature.
+# Unfortunately MinGW toolchains seem to have a bug where it tries
+# to use SjLj exception handling even if not supported by the toolchain,
+# causing linking failure for C++ code like demux_rtp.cpp
+if ! mingw32 ; then
+cflag_check -fno-asynchronous-unwind-tables && CFLAGS="$CFLAGS -fno-asynchronous-unwind-tables"
+fi
+cflag_check -mno-omit-leaf-frame-pointer && cflags_no_omit_leaf_frame_pointer="-mno-omit-leaf-frame-pointer"
+cflag_check -MMD -MP && DEPFLAGS="-MMD -MP"
+
+
+if test -n "$LDFLAGS" ; then
+  extra_ldflags="$extra_ldflags $LDFLAGS"
+  warn_cflags=yes
+fi
+if test -n "$CPPFLAGS" ; then
+  extra_cflags="$extra_cflags $CPPFLAGS"
+  warn_cflags=yes
+fi
+
+
+# ---
+
+# now that we know what compiler should be used for compilation, try to find
+# out which assembler is used by the $_cc compiler
+if test "$_as" = auto ; then
+  _as=$($_cc -print-prog-name=as)
+  test -z "$_as" && _as=as
+fi
+
+if test "$_nm" = auto ; then
+  _nm=$($_cc -print-prog-name=nm)
+  test -z "$_nm" && _nm=nm
+fi
+
+
+echocheck "pthread"
+if linux ; then
+  THREAD_CFLAGS=-D_REENTRANT
+fi
+if test "$_pthreads" = auto ; then
+cat > $TMPC << EOF
+#include <pthread.h>
+static void *func(void *arg) { return arg; }
+int main(void) { pthread_t tid; return pthread_create(&tid, 0, func, 0) == 0 ? 0 : 1; }
+EOF
+_pthreads=no
+if ! hpux ; then
+  for ld_tmp in "-lpthreadGC2" "" "-lpthread" "-pthread" ; do
+    # for crosscompilation, we cannot execute the program, be happy if we can link statically
+    cc_check $THREAD_CFLAGS $ld_tmp && (tmp_run || test "$ld_static") && ld_pthread="$ld_tmp" && _pthreads=yes && break
+  done
+fi
+fi
+if test "$_pthreads" = yes ; then
+  test $ld_pthread && res_comment="using $ld_pthread"
+  extra_cflags="$extra_cflags $THREAD_CFLAGS"
+fi
+echores "$_pthreads"
+
+echocheck "iconv"
+if test "$_iconv" = auto ; then
+  cat > $TMPC << EOF
+#include <stdio.h>
+#include <unistd.h>
+#include <iconv.h>
+#define INBUFSIZE 1024
+#define OUTBUFSIZE 4096
+
+char inbuffer[INBUFSIZE];
+char outbuffer[OUTBUFSIZE];
+
+int main(void) {
+  size_t numread;
+  iconv_t icdsc;
+  char *tocode="UTF-8";
+  char *fromcode="cp1250";
+  if ((icdsc = iconv_open(tocode, fromcode)) != (iconv_t)(-1)) {
+    while ((numread = read(0, inbuffer, INBUFSIZE))) {
+      char *iptr=inbuffer;
+      char *optr=outbuffer;
+      size_t inleft=numread;
+      size_t outleft=OUTBUFSIZE;
+      if (iconv(icdsc, &iptr, &inleft, &optr, &outleft)
+          != (size_t)(-1)) {
+        write(1, outbuffer, OUTBUFSIZE - outleft);
+      }
+    }
+    if (iconv_close(icdsc) == -1)
+      ;
+  }
+  return 0;
+}
+EOF
+  _iconv=no
+  for ld_tmp in "" "-liconv" "-liconv $ld_dl" ; do
+    cc_check $ld_tmp && extra_ldflags="$extra_ldflags $ld_tmp" &&
+      ld_iconv="$ld_tmp" && _iconv=yes && break
+  done
+fi
+echores "$_iconv"
+
+
+echocheck "clock_gettime()"
+clock_gettime=no
+def_clock_gettime='#undef HAVE_CLOCK_GETTIME'
+statement_check_broken stddef.h time.h 'struct timespec tp; clock_gettime(CLOCK_MONOTONIC, &tp)' -lrt &&
+    { clock_gettime=yes ; def_clock_gettime='#define HAVE_CLOCK_GETTIME 1' ; extra_ldflags="$extra_ldflags -lrt" ; }
+echores "$clock_gettime"
+
+
+echocheck "ALSA audio"
+if test "$_alsa" = auto ; then
+  _alsa=no
+  header_check alsa/asoundlib.h -lasound $ld_dl $ld_pthread && _alsa=yes
+fi
+if test "$_alsa" = yes ; then
+  aomodules="alsa $aomodules"
+  extra_ldflags="$extra_ldflags -lasound $ld_dl $ld_pthread"
+else
+  noaomodules="alsa $noaomodules"
+fi
+echores "$_alsa"
+
+
+echocheck "freetype >= 2.0.9"
+
+# freetype depends on iconv
+if test "$_iconv" = no ; then
+    _freetype=no
+    res_comment="iconv support needed"
+fi
+
+if test "$_freetype" = auto ; then
+    test -n "$ld_static" && _freetypeconfig="$_freetypeconfig --static"
+    if ( $_freetypeconfig --version ) >/dev/null 2>&1 ; then
+        cat > $TMPC << EOF
+#include <stdio.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#if ((FREETYPE_MAJOR < 2) || ((FREETYPE_MINOR == 0) && (FREETYPE_PATCH < 9)))
+#error "Need FreeType 2.0.9 or newer"
+#endif
+int main(void) {
+    FT_Library library;
+    FT_Init_FreeType(&library);
+    return 0;
+}
+EOF
+        _freetype=no
+        cc_check $($_freetypeconfig --cflags) $($_freetypeconfig --libs) && _freetype=yes
+    else
+        _freetype=no
+    fi
+fi
+if test "$_freetype" = yes ; then
+    extra_cflags="$extra_cflags $($_freetypeconfig --cflags)"
+    extra_ldflags="$extra_ldflags $($_freetypeconfig --libs)"
+fi
+echores "$_freetype"
+
+if test "$_freetype" = no ; then
+    _fontconfig=no
+    res_comment="FreeType support needed"
+fi
+echocheck "fontconfig"
+if test "$_fontconfig" = auto ; then
+        cat > $TMPC << EOF
+#include <stdio.h>
+#include <stdlib.h>
+#include <fontconfig/fontconfig.h>
+#if FC_VERSION < 20402
+#error At least version 2.4.2 of Fontconfig required
+#endif
+int main(void) {
+    int err = FcInit();
+    if (err == FcFalse) {
+        printf("Could not initialize Fontconfig library.\n");
+        exit(err);
+    }
+    return 0;
+}
+EOF
+  _fontconfig=no
+  for ld_tmp in "" "-lexpat -lfreetype" "-lexpat -lfreetype -lz" "-lexpat -lfreetype -lz -liconv" ; do
+    ld_tmp="-lfontconfig $ld_tmp"
+    cc_check $ld_tmp && _fontconfig=yes && extra_ldflags="$extra_ldflags $ld_tmp" && break
+  done
+  if test "$_fontconfig" = no && $_pkg_config --exists fontconfig ; then
+    inc_tmp=$($_pkg_config --cflags fontconfig)
+    ld_tmp=$($_pkg_config --libs fontconfig)
+    cc_check $inc_tmp $ld_tmp && _fontconfig=yes &&
+      extra_ldflags="$extra_ldflags $ld_tmp" && extra_cflags="$extra_cflags $inc_tmp"
+  fi
+fi
+echores "$_fontconfig"
+
+echocheck "zlib"
+_zlib=no
+statement_check zlib.h 'inflate(0, Z_NO_FLUSH)' -lz && _zlib=yes
+if test "$_zlib" = yes ; then
+  def_zlib='#define CONFIG_ZLIB 1'
+  extra_ldflags="$extra_ldflags -lz"
+  extra_cflags="$extra_cflags -DZLIB_CONST"
+  # necessary for vf_screenshot
+  mplayer_encoders="$mplayer_encoders PNG_ENCODER"
+fi
+echores "$_zlib"
+
+
+# Any version of libmpg123 that knows MPG123_RESYNC_LIMIT shall be fine.
+# That is, 1.2.0 onwards. Recommened is 1.14 onwards, though.
+echocheck "mpg123 support"
+if test "$_mpg123" = auto; then
+  _mpg123=no
+  statement_check mpg123.h 'mpg123_param(NULL, MPG123_RESYNC_LIMIT, -1, 0.)' -lmpg123 &&
+      _mpg123=yes && extra_ldflags="$extra_ldflags -lmpg123"
+fi
+echores "$_mpg123"
+
+
+echocheck "termcap"
+if test "$_termcap" = auto ; then
+  _termcap=no
+  for ld_tmp in "-lncurses" "-ltinfo" "-ltermcap"; do
+    statement_check term.h 'tgetent(0, 0)' $ld_tmp &&
+      extra_ldflags="$extra_ldflags $ld_tmp" &&
+      ld_termcap="$ld_tmp" && _termcap=yes && break
+  done
+fi
+if test "$_termcap" = yes ; then
+  test $ld_termcap && res_comment="using $ld_termcap"
+fi
+echores "$_termcap"
+
+
+#############################################################################
+
+echocheck "automatic gdb attach"
+if test "$_crash_debug" = yes ; then
+  def_crash_debug='#define CONFIG_CRASH_DEBUG 1'
+else
+  def_crash_debug='#undef CONFIG_CRASH_DEBUG'
+  _crash_debug=no
+fi
+echores "$_crash_debug"
+
+echocheck "compiler support for noexecstack"
+if cflag_check -Wl,-z,noexecstack ; then
+  extra_ldflags="-Wl,-z,noexecstack $extra_ldflags"
+  echores "yes"
+else
+  echores "no"
+fi
+
+def_debug='#undef MP_DEBUG'
+test "$_debug" != "" && def_debug='#define MP_DEBUG 1'
+
+
+#############################################################################
+
+CFLAGS="$CFLAGS -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE"
+
+CXXFLAGS=" $CFLAGS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS"
+
+extra_ldflags="$extra_ldflags $libm"
+
+#############################################################################
+
+mak_enable () {
+list=$(echo $1 | toupper)
+item=$(echo $2 | toupper)
+nprefix=$3;
+for part in $list; do
+  if $(echo $item | grep -q -E "(^| )$part($| )"); then
+    echo "${nprefix}_$part = yes"
+  else
+    echo "${nprefix}_$part = no"
+  fi
+done
+}
+
+#############################################################################
+
+extra_libs="$extra_libs -lavfilter -lavformat -lavcodec -lswscale -lswresample -lavutil"
+
+echo "Creating config.mak"
+cat > config.mak << EOF
+# -------- Generated by configure -----------
+
+# Ensure that locale settings do not interfere with shell commands.
+export LC_ALL = C
+
+prefix  = \$(DESTDIR)$_prefix
+BINDIR  = \$(DESTDIR)$_bindir
+DATADIR = \$(DESTDIR)$_datadir
+LIBDIR  = \$(DESTDIR)$_libdir
+MANDIR  = \$(DESTDIR)$_mandir
+CONFDIR = \$(DESTDIR)$_confdir
+
+AR      = $_ar
+ARFLAGS = $_arflags
+AS      = $_cc
+CC      = $_cc
+CXX     = $_cc
+HOST_CC = $_host_cc
+INSTALL = $_install
+INSTALLSTRIP = $_install_strip
+
+CFLAGS   = $WARNFLAGS $WARN_CFLAGS $CFLAGS $extra_cflags
+CXXFLAGS = $WARNFLAGS $CXXFLAGS $extra_cflags $extra_cxxflags
+CC_DEPFLAGS = $DEPFLAGS
+
+EXTRALIBS          = $ld_static $extra_ldflags $timer_libs $extra_libs
+
+ASFLAGS    = \$(CFLAGS)
+AS_DEPFLAGS= $DEPFLAGS
+HOSTCC     = \$(HOST_CC)
+HOSTCFLAGS = $HOSTCFLAGS
+HOSTLIBS   = $libm
+AS_O       = -o \$@
+CC_O       = -o \$@
+CXX_O      = -o \$@
+AS_C       = -c
+CC_C       = -c
+CXX_C      = -c
+LD         = gcc
+RANLIB     = $_ranlib
+STRIP      = strip
+
+EOF
+
+#############################################################################
+
+ff_config_enable () {
+list=$(echo $1 | toupper)
+item=$(echo $2 | toupper)
+_nprefix=$4;
+_defineprefix=$3;
+_postfix=$5;
+test -z "$_nprefix" && _nprefix='CONFIG'
+for part in $list; do
+  if $(echo $item | grep -q -E "(^| )$part($| )"); then
+    echo "${_defineprefix}define ${_nprefix}_${part}${_postfix} 1"
+  else
+    echo "${_defineprefix}define ${_nprefix}_${part}${_postfix} 0"
+  fi
+done
+}
+
+echo "Creating config.h"
+cat > $TMPH << EOF
+/*----------------------------------------------------------------------------
+** This file has been automatically generated by configure any changes in it
+** will be lost when you run configure again.
+** Instead of modifying definitions here, use the --enable/--disable options
+** of the configure script! See ./configure --help for details.
+*---------------------------------------------------------------------------*/
+
+#ifndef MPLAYER_CONFIG_H
+#define MPLAYER_CONFIG_H
+
+
+/* set up max. outburst. use 131072 for TrueHD SPDIF pass-through */
+#define MAX_OUTBURST 131072
+
+#define MPLAYER_DATADIR "$_datadir"
+#define MPLAYER_CONFDIR "$_confdir"
+#define MPLAYER_LIBDIR "$_libdir"
+
+#define MSG_CHARSET "UTF-8"
+
+/* configurable options */
+
+$def_crash_debug
+$def_debug
+
+#ifndef MP_DEBUG
+#undef MP_DEBUG
+#endif
+
+#ifndef MP_DEBUG
+#define CONFIG_SIGHANDLER 1
+#else
+#define CONFIG_SIGHANDLER 0
+#endif
+
+#ifndef MP_DEBUG
+#undef CONFIG_CRASH_DEBUG
+#endif
+
+
+#endif /* MPLAYER_CONFIG_H */
+EOF
+
+# Do not overwrite an unchanged config.h to avoid superfluous rebuilds.
+cmp -s "$TMPH" config.h || mv -f "$TMPH" config.h
+
+
+# Last move:
+cleanup
