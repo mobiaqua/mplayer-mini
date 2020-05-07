@@ -362,6 +362,14 @@ static int init(sh_video_t *sh){
     skip_frame = avctx->skip_frame;
 
     mp_dbg(MSGT_DECVIDEO, MSGL_DBG2, "libavcodec.size: %d x %d\n", avctx->width, avctx->height);
+    switch (sh->format) {
+    default:
+        avctx->extradata = sh->codecdata;
+        avctx->extradata_size = sh->codecdata_len;
+        break;
+    }
+
+    avctx->bits_per_coded_sample= sh->bits_per_coded_sample;
 
     set_dr_slice_settings(avctx, lavc_codec);
     avctx->thread_count = lavc_param_threads;

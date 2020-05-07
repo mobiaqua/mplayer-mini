@@ -107,11 +107,15 @@ typedef struct sh_video {
   int i_bps;              // == bitrate  (compressed bytes/sec)
   int disp_w,disp_h;      // display size (filled by fileformat parser)
   int flipped_input;
+  int bits_per_coded_sample;
   // output driver/filters: (set by libmpcodecs core)
   unsigned int outfmtidx;
   struct vf_instance *vfilter;          // the video filter chain, used for this video stream
   int level;
   int vf_initialized;
+  // codec-specific:
+  unsigned char* codecdata; // extra header data passed from demuxer to codec
+  int codecdata_len;
 } sh_video_t;
 
 typedef struct sh_sub {

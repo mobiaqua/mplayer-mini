@@ -353,6 +353,9 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
             }
 
             codec->codec_tag = mp_codec_id2tag(codec->codec_id, codec->codec_tag, 0);
+            sh_video->codecdata= codec->extradata;
+            sh_video->codecdata_len= codec->extradata_size;
+            sh_video->bits_per_coded_sample= codec->bits_per_coded_sample;
             sh_video->disp_w= codec->width;
             sh_video->disp_h= codec->height;
             sh_video->fps=av_q2d(st->r_frame_rate);

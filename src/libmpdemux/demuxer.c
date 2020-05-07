@@ -48,6 +48,7 @@
 #endif
 #include "av_helpers.h"
 #include "libavutil/avstring.h"
+#include "libavutil/bswap.h"
 
 // Options shared between demuxers
 int rtsp_transport_http = 0;
@@ -1033,6 +1034,16 @@ static demuxer_t *demux_open_stream(stream_t *stream, int file_format,
  dmx_open:
 
     demuxer->file_format = file_format;
+
+    if (sh_video = demuxer->video->sh) {
+        int format = av_le2ne32(sh_video->format);
+        mp_msg(MSGT_DEMUX, MSGL_INFO,
+               "VIDEO:  [%.4s]  %dx%d  %dbpp  %5.3f fps  %5.1f kbps (%4.1f kbyte/s)\n",
+               (char *) &format, sh_video->disp_w,
+               sh_video->disp_h, sh_video->bits_per_coded_sample,
+               sh_video->fps, sh_video->i_bps * 0.008f,
+               sh_video->i_bps / 1024.0f);
+    }
 
     return demuxer;
 }
