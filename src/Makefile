@@ -44,6 +44,7 @@ SRCS_COMMON = bstr.c                            \
               playtreeparser.c                  \
               subopt-helper.c                   \
               libaf/af.c                        \
+              libaf/af_dummy.c                  \
               libaf/af_format.c                 \
               libaf/af_sub.c                    \
               libaf/af_surround.c               \
