@@ -314,6 +314,9 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
                     sh_audio->format = 0x7;
                     break;
             }
+            sh_audio->block_align= codec->block_align ? codec->block_align : 1;
+            sh_audio->codecdata= codec->extradata;
+            sh_audio->codecdata_len= codec->extradata_size;
             if (title && title->value)
                 mp_msg(MSGT_IDENTIFY, MSGL_INFO, "ID_AID_%d_NAME=%s\n", priv->audio_streams, title->value);
             if (st->disposition & AV_DISPOSITION_DEFAULT)

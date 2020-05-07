@@ -110,6 +110,9 @@ static int init(sh_audio_t *sh_audio)
     lavc_context->channels = sh_audio->channels;
     lavc_context->channel_layout = sh_audio->channel_layout;
     lavc_context->request_channel_layout = av_get_default_channel_layout(audio_output_channels);
+    lavc_context->block_align = sh_audio->block_align;
+    lavc_context->extradata = sh_audio->codecdata;
+    lavc_context->extradata_size = sh_audio->codecdata_len;
     lavc_context->codec_tag = sh_audio->format; //FOURCC
     lavc_context->codec_id = lavc_codec->id; // not sure if required, imho not --A'rpi
 
