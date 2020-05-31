@@ -30,6 +30,7 @@
 // Static list of filters
 extern const af_info_t af_info_dummy;
 extern const af_info_t af_info_format;
+extern const af_info_t af_info_pan;
 extern const af_info_t af_info_volume;
 extern const af_info_t af_info_surround;
 extern const af_info_t af_info_sub;
@@ -39,6 +40,7 @@ extern const af_info_t af_info_lavcresample;
 static const af_info_t * const filter_list[] = {
    &af_info_dummy,
    &af_info_format,
+   &af_info_pan,
    &af_info_volume,
    &af_info_surround,
    &af_info_sub,

@@ -46,6 +46,7 @@ SRCS_COMMON = bstr.c                            \
               libaf/af.c                        \
               libaf/af_dummy.c                  \
               libaf/af_format.c                 \
+              libaf/af_pan.c                    \
               libaf/af_sub.c                    \
               libaf/af_surround.c               \
               libaf/af_tools.c                  \
