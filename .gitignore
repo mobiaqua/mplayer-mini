@@ -3,3 +3,5 @@ Debug
 *.o
 *.d
 mplayer-mini
+sysroot-native
+sysroot
