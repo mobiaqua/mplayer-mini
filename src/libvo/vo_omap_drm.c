@@ -71,6 +71,7 @@ typedef struct {
 	void           *priv;
 	struct omap_bo *bo;
 	uint32_t       boHandle;
+	int            dmaBuf;
 	int            locked;
 } DisplayVideoBuffer;
 
@@ -86,6 +87,7 @@ typedef struct {
 typedef struct {
 	struct omap_bo  *bo;
 	uint32_t        boHandle;
+	int             dmaBuf;
 	uint32_t        fbId;
 	void            *ptr;
 	uint32_t        width, height;
@@ -546,6 +548,7 @@ static int getDisplayVideoBuffer(DisplayVideoBuffer *handle, uint32_t pixelfmt, 
 	videoBuffer->dstY = 0;
 	videoBuffer->dstWidth = width;
 	videoBuffer->dstHeight = height;
+	videoBuffer->dmaBuf = handle->dmaBuf = omap_bo_dmabuf(videoBuffer->bo);
 	videoBuffer->size = omap_bo_size(videoBuffer->bo);
 	videoBuffer->ptr = omap_bo_map(videoBuffer->bo);
 	if (!videoBuffer->ptr) {
@@ -565,7 +568,7 @@ static int releaseVideoBuffer(VideoBuffer *buffer) {
 
 	drmModeRmFB(_fd, buffer->fbId);
 
-	close(buffer->boHandle);
+	close(buffer->dmaBuf);
 
 	omap_bo_del(buffer->bo);
 
@@ -654,7 +657,7 @@ static uint32_t put_image(mp_image_t *mpi) {
 		if (!_videoBuffers[_currentVideoBuffer])
 			_videoBuffers[_currentVideoBuffer] = getVideoBuffer(IMGFMT_NV12, frame_width, frame_height);
 		dst = (uint8_t *)_videoBuffers[_currentVideoBuffer]->ptr;
-		if (mpi->imgfmt == IMGFMT_YV12 && (ALIGN2(frame_width, 5) == frame_width)) {
+		if (0 && mpi->imgfmt == IMGFMT_YV12 && (ALIGN2(frame_width, 5) == frame_width)) {
 			srcPtr[0] = mpi->planes[0];
 			srcPtr[1] = mpi->planes[1];
 			srcPtr[2] = mpi->planes[2];

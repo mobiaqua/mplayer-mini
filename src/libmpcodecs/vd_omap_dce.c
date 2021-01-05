@@ -24,7 +24,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <unistd.h>
 
+#define xdc_target_types__ gnu/targets/std.h
 #include <xdc/std.h>
 #include <ti/sdo/ce/Engine.h>
 #include <ti/xdais/dm/xdm.h>
@@ -68,6 +70,7 @@ typedef struct {
 	void           *priv;
 	struct omap_bo *bo;
 	uint32_t       boHandle;
+	int            dmaBuf;
 	int            locked;
 } DisplayVideoBuffer;
 
@@ -406,15 +409,15 @@ static int init(sh_video_t *sh) {
 	_inputBufSize = omap_bo_size(_inputBufBo);
 
 	_codecInputBufs->numBufs = 1;
-	_codecInputBufs->descs[0].memType = XDM_MEMTYPE_BO;
-	_codecInputBufs->descs[0].buf = (XDAS_Int8 *)omap_bo_handle(_inputBufBo);
+	_codecInputBufs->descs[0].memType = XDM_MEMTYPE_RAW;
+	_codecInputBufs->descs[0].buf = (XDAS_Int8 *)omap_bo_dmabuf(_inputBufBo);
 	_codecInputBufs->descs[0].bufSize.bytes = omap_bo_size(_inputBufBo);
+	dce_buf_lock(1, (size_t *)&(_codecInputBufs->descs[0].buf));
 
 	_codecOutputBufs->numBufs = 2;
-	_codecOutputBufs->descs[0].memType = XDM_MEMTYPE_BO;
+	_codecOutputBufs->descs[0].memType = XDM_MEMTYPE_RAW;
 	_codecOutputBufs->descs[0].bufSize.bytes = _frameWidth * _frameHeight;
-	_codecOutputBufs->descs[1].memType = XDM_MEMTYPE_BO_OFFSET;
-	_codecOutputBufs->descs[1].buf = (XDAS_Int8 *)(_frameWidth * _frameHeight);
+	_codecOutputBufs->descs[1].memType = XDM_MEMTYPE_RAW;
 	_codecOutputBufs->descs[1].bufSize.bytes = _frameWidth * (_frameHeight / 2);
 
 	_frameBuffers = (FrameBuffer **)calloc(_numFrameBuffers, sizeof(FrameBuffer *));
@@ -489,6 +492,8 @@ static void uninit(sh_video_t *sh) {
 		_codecDynParams = NULL;
 	}
 	if (_codecInputBufs) {
+		dce_buf_unlock(1, (size_t *)&(_codecInputBufs->descs[0].buf));
+		close((int)_codecInputBufs->descs[0].buf);
 		dce_free(_codecInputBufs);
 		_codecInputBufs = NULL;
 	}
@@ -543,10 +548,17 @@ static int control(sh_video_t *sh, int cmd, void *arg, ...) {
 		do {
 			codecError = VIDDEC3_process(_codecHandle, _codecInputBufs, _codecOutputBufs,
 			                             _codecInputArgs, _codecOutputArgs);
+			if ((codecError == DCE_EXDM_UNSUPPORTED) ||
+				(codecError == DCE_EIPC_CALL_FAIL) ||
+				(codecError == DCE_EINVALID_INPUT))
+			{
+				break;
+			}
 		} while (codecError != XDM_EFAIL);
 
 		for (i = 0; i < _numFrameBuffers; i++) {
 			if (_frameBuffers[i]->buffer.priv && _frameBuffers[i]->locked) {
+				dce_buf_unlock(1, (size_t *)&(_frameBuffers[i]->buffer.dmaBuf));
 				_frameBuffers[i]->locked = 0;
 			}
 		}
@@ -568,6 +580,7 @@ static FrameBuffer *getBuffer(void) {
 	for (i = 0; i < _numFrameBuffers; i++) {
 		if (_frameBuffers[i]->buffer.priv && !_frameBuffers[i]->locked) {
 			if (!_frameBuffers[i]->buffer.locked) {
+				dce_buf_lock(1, (size_t *)&(_frameBuffers[i]->buffer.dmaBuf));
 				_frameBuffers[i]->locked = 1;
 				return _frameBuffers[i];
 			}
@@ -589,6 +602,8 @@ static void lockBuffer(FrameBuffer *fb) {
 		return;
 	}
 
+	dce_buf_lock(1, (size_t *)&(_frameBuffers[fb->index]->buffer.dmaBuf));
+
 	_frameBuffers[fb->index]->locked = 1;
 }
 
@@ -606,6 +621,8 @@ static void unlockBuffer(FrameBuffer *fb) {
 		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] unlockBuffer() Missing frame buffer at index: %d\n", fb->index);
 		return;
 	}
+
+	dce_buf_unlock(1, (size_t *)&(_frameBuffers[fb->index]->buffer.dmaBuf));
 
 	_frameBuffers[fb->index]->locked = 0;
 }
@@ -634,7 +651,8 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags) {
 	_codecInputBufs->numBufs = 1;
 	_codecInputBufs->descs[0].bufSize.bytes = len;
 
-	_codecOutputBufs->descs[0].buf = (XDAS_Int8 *)fb->buffer.boHandle;
+	_codecOutputBufs->descs[0].buf = (XDAS_Int8 *)fb->buffer.dmaBuf;
+	_codecOutputBufs->descs[1].buf = (XDAS_Int8 *)fb->buffer.dmaBuf;
 
 	memset(_codecOutputArgs->outputID, 0, sizeof(_codecOutputArgs->outputID));
 	memset(_codecOutputArgs->freeBufID, 0, sizeof(_codecOutputArgs->freeBufID));
@@ -644,7 +662,10 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags) {
 	if (codecError != VIDDEC3_EOK) {
 		mp_msg(MSGT_DECVIDEO, MSGL_ERR, "[vd_omap_dce] decode() VIDDEC3_process() status: %d, extendedError: %08x\n",
 		       codecError, _codecOutputArgs->extendedError);
-		if (XDM_ISFATALERROR(_codecOutputArgs->extendedError)) {
+		if (XDM_ISFATALERROR(_codecOutputArgs->extendedError) ||
+			(codecError == DCE_EXDM_UNSUPPORTED) ||
+			(codecError == DCE_EIPC_CALL_FAIL) ||
+			(codecError == DCE_EINVALID_INPUT)) {
 			unlockBuffer(fb);
 			return NULL;
 		}
