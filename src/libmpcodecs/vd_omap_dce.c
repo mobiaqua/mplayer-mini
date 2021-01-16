@@ -575,20 +575,35 @@ static int control(sh_video_t *sh, int cmd, void *arg, ...) {
 		//mp_msg(MSGT_DECVIDEO, MSGL_INFO, "[vd_omap_dce] control: VDCTRL_RESYNC_STREAM\n");
 		codecError = VIDDEC3_control(_codecHandle, XDM_FLUSH, _codecDynParams, _codecStatus);
 		if (codecError != VIDDEC3_EOK) {
-			mp_msg(MSGT_DECVIDEO, MSGL_ERR, "[vd_omap_dce] Error: VIDDEC3_control(XDM_FLUSH) failed %d\n", codecError);
+			mp_msg(MSGT_DECVIDEO, MSGL_ERR, "[vd_omap_dce] control() VIDDEC3_control(XDM_FLUSH) failed %d\n", codecError);
 			return CONTROL_ERROR;
 		}
+
 		_codecInputArgs->inputID = 0;
+		_codecInputArgs->numBytes = 0;
 		_codecInputBufs->numBufs = 0;
 		_codecInputBufs->descs[0].bufSize.bytes = 0;
+
+		_codecOutputBufs->numBufs = 0;
+
+		memset(_codecOutputArgs->outputID, 0, sizeof(_codecOutputArgs->outputID));
+		memset(_codecOutputArgs->freeBufID, 0, sizeof(_codecOutputArgs->freeBufID));
+
+		codecError = VIDDEC3_process(_codecHandle, _codecInputBufs, _codecOutputBufs,
+		                             _codecInputArgs, _codecOutputArgs);
 		do {
 			codecError = VIDDEC3_process(_codecHandle, _codecInputBufs, _codecOutputBufs,
 			                             _codecInputArgs, _codecOutputArgs);
-			if ((codecError == DCE_EXDM_UNSUPPORTED) ||
+			if (XDM_ISFATALERROR(_codecOutputArgs->extendedError) ||
+				(codecError == DCE_EXDM_UNSUPPORTED) ||
 				(codecError == DCE_EIPC_CALL_FAIL) ||
-				(codecError == DCE_EINVALID_INPUT))
-			{
-				break;
+				(codecError == DCE_EINVALID_INPUT)) {
+				mp_msg(MSGT_DECVIDEO, MSGL_ERR, "[vd_omap_dce] control() VIDDEC3_process() status: %d, extendedError: %08x\n",
+				       codecError, _codecOutputArgs->extendedError);
+				return CONTROL_FALSE;
+			}
+			for (i = 0; _codecOutputArgs->freeBufID[i]; i++) {
+				unlockBuffer((FrameBuffer *)_codecOutputArgs->freeBufID[i]);
 			}
 		} while (codecError != XDM_EFAIL);
 
@@ -598,6 +613,10 @@ static int control(sh_video_t *sh, int cmd, void *arg, ...) {
 				_frameBuffers[i]->locked = 0;
 			}
 		}
+
+		memset(_codecOutputArgs->outputID, 0, sizeof(_codecOutputArgs->outputID));
+		memset(_codecOutputArgs->freeBufID, 0, sizeof(_codecOutputArgs->freeBufID));
+
 		_decoderLag = 0;
 		return CONTROL_OK;
 	}
@@ -651,6 +670,7 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags) {
 	_codecInputBufs->numBufs = 1;
 	_codecInputBufs->descs[0].bufSize.bytes = len;
 
+	_codecOutputBufs->numBufs = 2;
 	_codecOutputBufs->descs[0].buf = (XDAS_Int8 *)fb->buffer.dmaBuf;
 	_codecOutputBufs->descs[1].buf = (XDAS_Int8 *)fb->buffer.dmaBuf;
 
