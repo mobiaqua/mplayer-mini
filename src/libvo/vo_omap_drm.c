@@ -137,7 +137,6 @@ int                                _lastOsdX;
 int                                _lastOsdY;
 int                                _lastOsdW;
 int                                _lastOsdH;
-int                                _lastOsd;
 int                                _osdChanged;
 
 int                                _currentOSDBuffer;
@@ -378,7 +377,6 @@ static int preinit(const char *arg) {
 	_dce = 0;
 	_currentOSDBuffer = 0;
 	_currentVideoBuffer = 0;
-	_lastOsd = 0;
 	_osdChanged = 0;
 
 	_initialized = 1;
@@ -797,11 +795,9 @@ static void draw_alpha(int x0,int y0, int w,int h, unsigned char* src, unsigned 
 static void draw_osd(void) {
 	_osdChanged = vo_osd_changed(0);
 	if (_osdChanged) {
-//		if (_lastOsd) {
-			omap_bo_cpu_prep(_osdBuffers[_currentOSDBuffer].bo, OMAP_GEM_WRITE);
-			memset(_osdBuffers[_currentOSDBuffer].ptr, 0, _osdBuffers[_currentOSDBuffer].size);
-			omap_bo_cpu_fini(_osdBuffers[_currentOSDBuffer].bo, OMAP_GEM_WRITE);
-//		}
+		omap_bo_cpu_prep(_osdBuffers[_currentOSDBuffer].bo, OMAP_GEM_WRITE);
+		memset(_osdBuffers[_currentOSDBuffer].ptr, 0, _osdBuffers[_currentOSDBuffer].size);
+		omap_bo_cpu_fini(_osdBuffers[_currentOSDBuffer].bo, OMAP_GEM_WRITE);
 
 		vo_draw_text(_modeInfo.hdisplay, _modeInfo.vdisplay - 20, draw_alpha);
 	}
@@ -841,8 +837,8 @@ static void flip_page() {
 			mp_msg(MSGT_VO, MSGL_FATAL, "[omap_drm] Error: flip() Failed set plane: %s\n", strerror(errno));
 			goto fail;
 		}
-//		if (++_currentOSDBuffer >= NUM_OSD_FB)
-//			_currentOSDBuffer = 0;
+		if (++_currentOSDBuffer >= NUM_OSD_FB)
+			_currentOSDBuffer = 0;
 		_osdChanged = 0;
 	}
 
