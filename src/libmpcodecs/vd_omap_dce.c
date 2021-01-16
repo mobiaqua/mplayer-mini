@@ -119,6 +119,42 @@ static unsigned int               _codecId;
 static int                        _decoderLag;
 static mp_image_t                 *_mpi;
 
+static void lockBuffer(FrameBuffer *fb) {
+	if (_frameBuffers[fb->index]->locked) {
+		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] lockBuffer() Already locked frame buffer at index: %d\n", fb->index);
+		return;
+	}
+
+	if (!_frameBuffers[fb->index]->buffer.priv) {
+		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] lockBuffer() Missing frame buffer at index: %d\n", fb->index);
+		return;
+	}
+
+	dce_buf_lock(1, (size_t *)&(_frameBuffers[fb->index]->buffer.dmaBuf));
+
+	_frameBuffers[fb->index]->locked = 1;
+}
+
+static void unlockBuffer(FrameBuffer *fb) {
+	if (!fb) {
+		return;
+	}
+
+	if (!_frameBuffers[fb->index]->locked) {
+		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] unlockBuffer() Already unlocked frame buffer at index: %d\n", fb->index);
+		return;
+	}
+
+	if (!_frameBuffers[fb->index]->buffer.priv) {
+		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] unlockBuffer() Missing frame buffer at index: %d\n", fb->index);
+		return;
+	}
+
+	dce_buf_unlock(1, (size_t *)&(_frameBuffers[fb->index]->buffer.dmaBuf));
+
+	_frameBuffers[fb->index]->locked = 0;
+}
+
 static int init(sh_video_t *sh) {
 	Engine_Error engineError;
 	DisplayHandle displayHandle;
@@ -589,42 +625,6 @@ static FrameBuffer *getBuffer(void) {
 
 	mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] getBuffer() No free slots for output buffer\n");
 	return NULL;
-}
-
-static void lockBuffer(FrameBuffer *fb) {
-	if (_frameBuffers[fb->index]->locked) {
-		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] lockBuffer() Already locked frame buffer at index: %d\n", fb->index);
-		return;
-	}
-
-	if (!_frameBuffers[fb->index]->buffer.priv) {
-		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] lockBuffer() Missing frame buffer at index: %d\n", fb->index);
-		return;
-	}
-
-	dce_buf_lock(1, (size_t *)&(_frameBuffers[fb->index]->buffer.dmaBuf));
-
-	_frameBuffers[fb->index]->locked = 1;
-}
-
-static void unlockBuffer(FrameBuffer *fb) {
-	if (!fb) {
-		return;
-	}
-
-	if (!_frameBuffers[fb->index]->locked) {
-		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] unlockBuffer() Already unlocked frame buffer at index: %d\n", fb->index);
-		return;
-	}
-
-	if (!_frameBuffers[fb->index]->buffer.priv) {
-		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] unlockBuffer() Missing frame buffer at index: %d\n", fb->index);
-		return;
-	}
-
-	dce_buf_unlock(1, (size_t *)&(_frameBuffers[fb->index]->buffer.dmaBuf));
-
-	_frameBuffers[fb->index]->locked = 0;
 }
 
 static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags) {
