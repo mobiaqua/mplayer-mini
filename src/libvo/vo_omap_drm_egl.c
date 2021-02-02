@@ -82,6 +82,7 @@ typedef struct {
 	void           *priv;
 	struct omap_bo *bo;
 	uint32_t       boHandle;
+	int            dmaBuf;
 	int            locked;
 } DisplayVideoBuffer;
 
@@ -695,7 +696,7 @@ static int getDisplayVideoBuffer(DisplayVideoBuffer *handle, uint32_t pixelfmt, 
 	handle->bo = renderTexture->bo = omap_bo_new(_omapDevice, fbSize, OMAP_BO_WC);
 	handle->boHandle = omap_bo_handle(handle->bo);
 	renderTexture->mapPtr = omap_bo_map(handle->bo);
-	renderTexture->dmabuf = omap_bo_dmabuf(renderTexture->bo);
+	handle->dmaBuf = renderTexture->dmabuf = omap_bo_dmabuf(renderTexture->bo);
 	{
 		EGLint attr[] = {
 			EGL_GL_VIDEO_FOURCC_TI,      (EGLint)fourcc,
@@ -953,7 +954,7 @@ static uint32_t put_image(mp_image_t *mpi) {
 		uint8_t *dst;
 
 		dst = renderTexture->mapPtr;
-		if (mpi->imgfmt == IMGFMT_YV12 && (ALIGN2(frame_width, 5) == frame_width)) {
+		if (0 && mpi->imgfmt == IMGFMT_YV12 && (ALIGN2(frame_width, 5) == frame_width)) {
 			srcPtr[0] = mpi->planes[0];
 			srcPtr[1] = mpi->planes[1];
 			srcPtr[2] = mpi->planes[2];
