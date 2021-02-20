@@ -484,15 +484,6 @@ static void uninit(void) {
 	_initialized = 0;
 }
 
-static int getHandle(DisplayHandle *handle) {
-	if (!_initialized || !handle)
-		return -1;
-
-	handle->handle = _fd;
-
-	return 0;
-}
-
 static VideoBuffer *getVideoBuffer(uint32_t pixelfmt, int width, int height) {
 	DisplayVideoBuffer buffer;
 	VideoBuffer *videoBuffer;
@@ -866,7 +857,6 @@ static int control(uint32_t request, void *data) {
 		return VO_TRUE;
 	case VOCTRL_DRAW_IMAGE:
 		return put_image(data);
-
-	return VO_NOTIMPL;
 	}
+	return VO_NOTIMPL;
 }
