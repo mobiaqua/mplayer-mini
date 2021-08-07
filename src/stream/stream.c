@@ -24,11 +24,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <strings.h>
 #include <assert.h>
 
 #include "config.h"
 
+#include "libavutil/avstring.h"
 #include "mp_msg.h"
 #include "help_mp.h"
 #include "osdep/shmem.h"
@@ -118,7 +118,7 @@ stream_t* open_stream_full(const char* filename,int mode, char** options, int* f
       int l = strlen(sinfo->protocols[j]);
       // l == 0 => Don't do protocol matching (ie network and filenames)
       if((l == 0 && !strstr(filename, "://")) ||
-         ((strncasecmp(sinfo->protocols[j],filename,l) == 0) &&
+         ((av_strncasecmp(sinfo->protocols[j],filename,l) == 0) &&
 		      (strncmp("://",filename+l,3) == 0))) {
 	int r;
 	char *redirected_url = NULL;

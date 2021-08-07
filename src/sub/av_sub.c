@@ -63,7 +63,7 @@ int decode_avsub(struct sh_sub *sh, uint8_t **data, int *size,
     pkt.size = *size;
     pkt.pts = *pts * 1000;
     if (*pts != MP_NOPTS_VALUE && *endpts != MP_NOPTS_VALUE)
-        pkt.convergence_duration = (*endpts - *pts) * 1000;
+        pkt.duration = (*endpts - *pts) * 1000;
     if (!ctx) {
         AVCodec *sub_codec;
         init_avcodec();

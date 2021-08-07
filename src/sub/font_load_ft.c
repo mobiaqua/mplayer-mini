@@ -29,7 +29,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include <strings.h>
 
 #include <iconv.h>
 
@@ -40,6 +39,7 @@
 #include <fontconfig/fontconfig.h>
 
 #include "libavutil/common.h"
+#include "libavutil/avstring.h"
 #include "mpbswap.h"
 #include "font_load.h"
 #include "mp_msg.h"
@@ -99,7 +99,7 @@ static const FT_ULong osd_charcodes[OSD_CHARSET_SIZE] =
 #define f1616ToInt(x)		(((x)+0x8000)>>16)	// 16.16
 #define floatTof266(x)		((int)((x)*(1<<6)+0.5))
 
-#define ALIGN(x)                (((x)+7)&~7)    // 8 byte align
+#define ALIGN(x)                (((x)+15)&~15)    // 16 byte align
 
 #define WARNING(msg, args...)      mp_msg(MSGT_OSD, MSGL_WARN, msg "\n", ## args)
 
@@ -976,7 +976,7 @@ static font_desc_t* read_font_desc_ft(const char *fname, int face_index, int mov
     if (subtitle_font_ppem > 128) subtitle_font_ppem = 128;
     if (osd_font_ppem > 128) osd_font_ppem = 128;
 
-    unicode = !subtitle_font_encoding || strcasecmp(subtitle_font_encoding, "unicode") == 0;
+    unicode = !subtitle_font_encoding || av_strcasecmp(subtitle_font_encoding, "unicode") == 0;
 
     desc = init_font_desc();
     if(!desc) goto err_out;

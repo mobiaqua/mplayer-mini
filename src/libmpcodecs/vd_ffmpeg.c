@@ -18,7 +18,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <strings.h>
 #include <assert.h>
 #include <time.h>
 
@@ -29,6 +28,7 @@
 #include "av_helpers.h"
 
 #include "libavutil/common.h"
+#include "libavutil/avstring.h"
 #include "libavutil/dict.h"
 #include "libavutil/intreadwrite.h"
 #include "libavutil/opt.h"
@@ -151,12 +151,12 @@ const m_option_t lavc_decode_opts_conf[]={
 
 static enum AVDiscard str2AVDiscard(char *str) {
     if (!str)                               return AVDISCARD_DEFAULT;
-    if (strcasecmp(str, "none"   ) == 0)    return AVDISCARD_NONE;
-    if (strcasecmp(str, "default") == 0)    return AVDISCARD_DEFAULT;
-    if (strcasecmp(str, "nonref" ) == 0)    return AVDISCARD_NONREF;
-    if (strcasecmp(str, "bidir"  ) == 0)    return AVDISCARD_BIDIR;
-    if (strcasecmp(str, "nonkey" ) == 0)    return AVDISCARD_NONKEY;
-    if (strcasecmp(str, "all"    ) == 0)    return AVDISCARD_ALL;
+    if (av_strcasecmp(str, "none"   ) == 0) return AVDISCARD_NONE;
+    if (av_strcasecmp(str, "default") == 0) return AVDISCARD_DEFAULT;
+    if (av_strcasecmp(str, "nonref" ) == 0) return AVDISCARD_NONREF;
+    if (av_strcasecmp(str, "bidir"  ) == 0) return AVDISCARD_BIDIR;
+    if (av_strcasecmp(str, "nonkey" ) == 0) return AVDISCARD_NONKEY;
+    if (av_strcasecmp(str, "all"    ) == 0) return AVDISCARD_ALL;
     mp_msg(MSGT_DECVIDEO, MSGL_ERR, "Unknown discard value %s\n", str);
     return AVDISCARD_DEFAULT;
 }
@@ -738,10 +738,21 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags){
     pkt.size = len;
     // Necessary to decode e.g. CorePNG and ZeroCodec correctly
     pkt.flags = (sh->ds->flags & 1) ? AV_PKT_FLAG_KEY : 0;
-    av_packet_split_side_data(&pkt);
+    mp_packet_split_side_data(&pkt);
     if (av_packet_get_side_data(&pkt, AV_PKT_DATA_PALETTE, NULL))
         ctx->palette_sent = 1;
-    ret = avcodec_decode_video2(avctx, pic, &got_picture, &pkt);
+    if (sh->ds->buffer_pos < len)
+        mp_msg(MSGT_DECVIDEO, MSGL_ERR, "Bad stream state, please report as bug!\n");
+    ret = avcodec_send_packet(avctx, !pkt.data && !pkt.size ? NULL : &pkt);
+    if (ret == AVERROR(EAGAIN)) {
+        if (sh->ds->buffer_pos >= len) sh->ds->buffer_pos -= len;
+        ret = 0;
+    }
+    if (ret >= 0 || ret == AVERROR_EOF) {
+        ret = avcodec_receive_frame(avctx, pic);
+        got_picture = ret >= 0;
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) ret = 0;
+    }
     ctx->refcount_frame = pic;
     pkt.data = NULL;
     pkt.size = 0;
@@ -751,7 +762,7 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags){
     // FFmpeg allocate - this mostly happens with nonref_dr.
     // Ensure we treat it correctly.
     dr1= ctx->do_dr1 && pic->opaque != NULL;
-    if(ret<0) mp_msg(MSGT_DECVIDEO, MSGL_WARN, "Error while decoding frame!\n");
+    if(ret<0) mp_msg(MSGT_DECVIDEO, MSGL_WARN, "Error while decoding frame! (%i)\n", ret);
 //printf("repeat: %d\n", pic->repeat_pict);
 //-- vstats generation
     while(lavc_param_vstats){ // always one time loop
@@ -782,6 +793,8 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags){
 
         // average MB quantizer
         {
+// TODO: still possible in new FFmpeg API?
+#if 0
             int x, y;
             int w = ((avctx->width  << lavc_param_lowres)+15) >> 4;
             int h = ((avctx->height << lavc_param_lowres)+15) >> 4;
@@ -794,6 +807,7 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags){
                 q += qstride;
             }
             quality /= w * h;
+#endif
         }
 
         all_len+=len;
@@ -879,7 +893,8 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags){
     }
 
 /* to comfirm with newer lavc style */
-    mpi->qscale = av_frame_get_qp_table(pic, &mpi->qstride, &mpi->qscale_type);
+// TODO: still possible in new FFmpeg API?
+//    mpi->qscale = av_frame_get_qp_table(pic, &mpi->qstride, &mpi->qscale_type);
     mpi->pict_type=pic->pict_type;
     mpi->fields = MP_IMGFIELD_ORDERED;
     if(pic->interlaced_frame) mpi->fields |= MP_IMGFIELD_INTERLACED;

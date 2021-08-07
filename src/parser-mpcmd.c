@@ -24,12 +24,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 #include <errno.h>
 
 #ifdef MP_DEBUG
 #include <assert.h>
 #endif
+
+#include "libavutil/avstring.h"
 
 #include "mp_msg.h"
 #include "help_mp.h"
@@ -54,7 +55,7 @@ static int is_entry_option(char *opt, char *param, play_tree_t** ret) {
 
   *ret = NULL;
 
-  if(strcasecmp(opt,"playlist") == 0) { // We handle playlist here
+  if(av_strcasecmp(opt,"playlist") == 0) { // We handle playlist here
     if(!param)
       return M_OPT_MISSING_PARAM;
 
@@ -152,7 +153,7 @@ m_config_parse_mp_command_line(m_config_t *config, int argc, char **argv)
 	mp_msg(MSGT_CFGPARSER, MSGL_DBG3, "this_opt = option: %s\n", opt);
 	// We handle here some specific option
 	// Loop option when it apply to a group
-	if(strcasecmp(opt,"loop") == 0 &&
+	if(av_strcasecmp(opt,"loop") == 0 &&
 		  (! last_entry || last_entry->child) ) {
 	  int l;
 	  char* end = NULL;
@@ -166,12 +167,12 @@ m_config_parse_mp_command_line(m_config_t *config, int argc, char **argv)
 	    pt->loop = l;
 	    tmp = 1;
 	  }
-	} else if(strcasecmp(opt,"shuffle") == 0) {
+	} else if(av_strcasecmp(opt,"shuffle") == 0) {
 	  if(last_entry && last_entry->child)
 	    last_entry->flags |= PLAY_TREE_RND;
 	  else
 	    last_parent->flags |= PLAY_TREE_RND;
-	} else if(strcasecmp(opt,"noshuffle") == 0) {
+	} else if(av_strcasecmp(opt,"noshuffle") == 0) {
 	  if(last_entry && last_entry->child)
 	    last_entry->flags &= ~PLAY_TREE_RND;
 	  else

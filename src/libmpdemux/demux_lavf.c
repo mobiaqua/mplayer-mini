@@ -32,6 +32,7 @@
 #include "stheader.h"
 #include "m_option.h"
 #include "sub/sub.h"
+#include "mp_taglists.h"
 
 #include "libavformat/avformat.h"
 #include "libavformat/avio.h"
@@ -65,7 +66,7 @@ const m_option_t lavfdopts_conf[] = {
 #define BIO_BUFFER_SIZE 32768
 
 typedef struct lavf_priv {
-    AVInputFormat *avif;
+    const AVInputFormat *avif;
     AVFormatContext *avfc;
     AVIOContext *pb;
     int audio_streams;
@@ -143,9 +144,10 @@ static int64_t mp_read_seek(void *opaque, int stream_idx, int64_t ts, int flags)
 }
 
 static void list_formats(void) {
-    AVInputFormat *fmt;
+    void *i = 0;
+    const AVInputFormat *fmt;
     mp_msg(MSGT_DEMUX, MSGL_INFO, "Available lavf input formats:\n");
-    for (fmt = av_iformat_next(NULL); fmt; fmt = av_iformat_next(fmt))
+    while ((fmt = av_demuxer_iterate(&i)))
         mp_msg(MSGT_DEMUX, MSGL_INFO, "%15s : %s\n", fmt->name, fmt->long_name);
 }
 
@@ -274,7 +276,8 @@ static void parse_cryptokey(AVFormatContext *avfc, const char *str) {
 static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
     lavf_priv_t *priv= demuxer->priv;
     AVStream *st= avfc->streams[i];
-    AVCodecContext *codec= st->codec;
+    AVCodecParameters *codec= st->codecpar;
+    AVCodecContext *codec_ctx= st->codec;
     char *stream_type = NULL;
     int stream_id;
     AVDictionaryEntry *lang = av_dict_get(st->metadata, "language", NULL, 0);
@@ -329,7 +332,7 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
             if (demuxer->audio->id != i)
                 st->discard= AVDISCARD_ALL;
             if (priv->audio_streams == 0) {
-                int rg_size;
+                size_t rg_size;
                 AVReplayGain *rg = (AVReplayGain*)av_stream_get_side_data(st, AV_PKT_DATA_REPLAYGAIN, &rg_size);
                 if (rg && rg_size >= sizeof(*rg)) {
                     priv->r_gain = rg->track_gain / 10000;
@@ -396,7 +399,7 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
                         const AVBitStreamFilter *bsf = av_bsf_get_by_name("h264_mp4toannexb");
                         if (bsf) {
                             if (av_bsf_alloc(bsf, &bsf_handle) >= 0) {
-                                if (avcodec_parameters_from_context(bsf_handle->par_in, codec) >= 0) {
+                                if (avcodec_parameters_from_context(bsf_handle->par_in, codec_ctx) >= 0) {
                                     if (av_bsf_init(bsf_handle) < 0) {
                                         mp_msg(MSGT_DEMUX, MSGL_FATAL, "Error init bsf\n");
                                         av_bsf_free(&bsf_handle);
@@ -423,7 +426,7 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
                     const AVBitStreamFilter *bsf = av_bsf_get_by_name("mpeg4_unpack_bframes");
                     if (bsf) {
                         if (av_bsf_alloc(bsf, &bsf_handle) >= 0) {
-                            if (avcodec_parameters_from_context(bsf_handle->par_in, codec) >= 0) {
+                            if (avcodec_parameters_from_context(bsf_handle->par_in, codec_ctx) >= 0) {
                                 if (av_bsf_init(bsf_handle) < 0) {
                                     mp_msg(MSGT_DEMUX, MSGL_FATAL, "Error init bsf\n");
                                     av_bsf_free(&bsf_handle);
@@ -493,7 +496,7 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
             break;
         }
         case AVMEDIA_TYPE_ATTACHMENT:{
-            if (st->codec->codec_id == AV_CODEC_ID_TTF || st->codec->codec_id == AV_CODEC_ID_OTF) {
+            if (st->codecpar->codec_id == AV_CODEC_ID_TTF || st->codecpar->codec_id == AV_CODEC_ID_OTF) {
                 AVDictionaryEntry *fnametag = av_dict_get(st->metadata, "filename", NULL, 0);
                 AVDictionaryEntry *mimetype = av_dict_get(st->metadata, "mimetype", NULL, 0);
                 demuxer_add_attachment(demuxer, fnametag ? fnametag->value : NULL,
@@ -506,7 +509,7 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
             st->discard= AVDISCARD_ALL;
     }
     if (stream_type) {
-        AVCodec *avc = avcodec_find_decoder(codec->codec_id);
+        const AVCodec *avc = avcodec_find_decoder(codec->codec_id);
         const char *codec_name = avc ? avc->name : "unknown";
         if (!avc && *stream_type == 's' && demuxer->s_streams[i])
             codec_name = sh_sub_type2str(((sh_sub_t *)demuxer->s_streams[i])->type);
@@ -564,7 +567,6 @@ static demuxer_t* demux_open_lavf(demuxer_t *demuxer){
         avfc->pb = priv->pb;
     }
 
-    av_dict_set(&opts, "fflags", "+keepside", 0);
     if(avformat_open_input(&avfc, mp_filename, priv->avif, &opts)<0){
         mp_msg(MSGT_HEADER,MSGL_ERR,"LAVF_header: av_open_input_stream() failed\n");
         return NULL;
@@ -641,7 +643,7 @@ static int demux_lavf_fill_buffer(demuxer_t *demux, demux_stream_t *dsds){
     demux_stream_t *ds;
     int id;
     AVStream *st;
-    AVCodecContext *codec;
+    AVCodecParameters *codec;
     unsigned int *ptr;
     double stream_pts = MP_NOPTS_VALUE;
     mp_msg(MSGT_DEMUX,MSGL_DBG2,"demux_lavf_fill_buffer()\n");
@@ -658,7 +660,7 @@ static int demux_lavf_fill_buffer(demuxer_t *demux, demux_stream_t *dsds){
 
     id= pkt.stream_index;
     st= priv->avfc->streams[id];
-    codec= st->codec;
+    codec= st->codecpar;
 
     if(id==demux->audio->id){
         // audio
@@ -678,11 +680,11 @@ static int demux_lavf_fill_buffer(demuxer_t *demux, demux_stream_t *dsds){
         sh = ds->sh;
         if (bsf_handle) {
             if (av_bsf_send_packet(bsf_handle, &pkt) < 0) {
-                av_free_packet(&pkt);
+                av_packet_unref(&pkt);
                 return 0;
             }
             if (av_bsf_receive_packet(bsf_handle, &pkt) < 0) {
-                av_free_packet(&pkt);
+                av_packet_unref(&pkt);
                 return 0;
             }
         }
@@ -691,43 +693,39 @@ static int demux_lavf_fill_buffer(demuxer_t *demux, demux_stream_t *dsds){
         ds=demux->sub;
         sub_utf8=1;
     } else {
-        av_free_packet(&pkt);
+        av_packet_unref(&pkt);
         return 1;
     }
 
-        av_packet_merge_side_data(&pkt);
-        if (id == demux->video->id &&
-                codec->codec_id == AV_CODEC_ID_WMV3 &&
-                codec->extradata &&
-                codec->extradata_size > 0 &&
-                first_frame) {
-            dp=new_demux_packet(pkt.size + 36);
-            ptr = dp->buffer;
-            ptr[0] = 0xc5ffffff;
-            ptr[1] = 4;
-            ptr[2] = (1 << 24) | *(unsigned int *)codec->extradata;
-            ptr[3] = codec->height;
-            ptr[4] = codec->width;
-            ptr[5] = 0xc;
-            ptr[6] = 0;
-            ptr[7] = 0;
-            ptr[8] = 0;
-            memcpy(dp->buffer + 36, pkt.data, pkt.size);
-            first_frame = 0;
-        } else {
-            dp=new_demux_packet(pkt.size);
-            memcpy(dp->buffer, pkt.data, pkt.size);
-        }
-        av_free_packet(&pkt);
+    mp_packet_merge_side_data(&pkt);
+    if (id == demux->video->id &&
+            codec->codec_id == AV_CODEC_ID_WMV3 &&
+            codec->extradata &&
+            codec->extradata_size > 0 &&
+            first_frame) {
+        dp=new_demux_packet(pkt.size + 36);
+        ptr = dp->buffer;
+        ptr[0] = 0xc5ffffff;
+        ptr[1] = 4;
+        ptr[2] = (1 << 24) | *(unsigned int *)codec->extradata;
+        ptr[3] = codec->height;
+        ptr[4] = codec->width;
+        ptr[5] = 0xc;
+        ptr[6] = 0;
+        ptr[7] = 0;
+        ptr[8] = 0;
+        memcpy(dp->buffer + 36, pkt.data, pkt.size);
+        first_frame = 0;
+    } else {
+        dp=new_demux_packet(pkt.size);
+        memcpy(dp->buffer, pkt.data, pkt.size);
+    }
 
     if(pkt.pts != AV_NOPTS_VALUE){
         dp->pts=pkt.pts * av_q2d(priv->avfc->streams[id]->time_base);
         priv->last_pts= dp->pts * AV_TIME_BASE;
         if(pkt.duration > 0)
             dp->endpts = dp->pts + pkt.duration * av_q2d(priv->avfc->streams[id]->time_base);
-        /* subtitle durations are sometimes stored in convergence_duration */
-        if(ds == demux->sub && pkt.convergence_duration > 0)
-            dp->endpts = dp->pts + pkt.convergence_duration * av_q2d(priv->avfc->streams[id]->time_base);
     }
     dp->pos=demux->filepos;
     dp->flags= !!(pkt.flags&AV_PKT_FLAG_KEY);
@@ -736,6 +734,7 @@ static int demux_lavf_fill_buffer(demuxer_t *demux, demux_stream_t *dsds){
         dp->stream_pts = stream_pts;
     // append packet to DS stream:
     ds_add_packet(ds,dp);
+    av_packet_unref(&pkt);
     return 1;
 }
 
@@ -874,7 +873,7 @@ redo:
             program = priv->avfc->programs[p];
             for(i=0; i<program->nb_stream_indexes; i++)
             {
-                switch(priv->avfc->streams[program->stream_index[i]]->codec->codec_type)
+                switch(priv->avfc->streams[program->stream_index[i]]->codecpar->codec_type)
                 {
                     case AVMEDIA_TYPE_VIDEO:
                         if(prog->vid == -2)

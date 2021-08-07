@@ -23,7 +23,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <strings.h>
 #include <assert.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -32,6 +31,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <limits.h>
+#include "libavutil/avstring.h"
 #include "m_config.h"
 #include "playtree.h"
 #include "playtreeparser.h"
@@ -230,7 +230,7 @@ parse_pls(play_tree_parser_t* p) {
   }
   if (!line)
     return NULL;
-  if(strcasecmp(line,"[playlist]"))
+  if(av_strcasecmp(line,"[playlist]"))
     return NULL;
   mp_msg(MSGT_PLAYTREE,MSGL_V,"Detected Winamp playlist format\n");
   play_tree_parser_stop_keeping(p);
@@ -238,7 +238,7 @@ parse_pls(play_tree_parser_t* p) {
   if(!line)
     return NULL;
   strstrip(line);
-  if(strncasecmp(line,"NumberOfEntries",15) == 0) {
+  if(av_strncasecmp(line,"NumberOfEntries",15) == 0) {
     v = pls_entry_get_value(line);
     n_entries = atoi(v);
     if(n_entries < 0)
@@ -254,19 +254,19 @@ parse_pls(play_tree_parser_t* p) {
       line = play_tree_parser_get_line(p);
       continue;
     }
-    if(strncasecmp(line,"File",4) == 0) {
+    if(av_strncasecmp(line,"File",4) == 0) {
       num = pls_read_entry(line+4,&entries,&max_entry,&v);
       if(num < 0)
 	mp_msg(MSGT_PLAYTREE,MSGL_ERR,"No value in entry %s\n",line);
       else
 	entries[num-1].file = strdup(v);
-    } else if(strncasecmp(line,"Title",5) == 0) {
+    } else if(av_strncasecmp(line,"Title",5) == 0) {
       num = pls_read_entry(line+5,&entries,&max_entry,&v);
       if(num < 0)
 	mp_msg(MSGT_PLAYTREE,MSGL_ERR,"No value in entry %s\n",line);
       else
 	entries[num-1].title = strdup(v);
-    } else if(strncasecmp(line,"Length",6) == 0) {
+    } else if(av_strncasecmp(line,"Length",6) == 0) {
       num = pls_read_entry(line+6,&entries,&max_entry,&v);
       if(num < 0)
 	mp_msg(MSGT_PLAYTREE,MSGL_ERR,"No value in entry %s\n",line);
@@ -326,7 +326,7 @@ parse_ref_ini(play_tree_parser_t* p) {
   if (!(line = play_tree_parser_get_line(p)))
     return NULL;
   strstrip(line);
-  if(strcasecmp(line,"[Reference]"))
+  if(av_strcasecmp(line,"[Reference]"))
     return NULL;
   mp_msg(MSGT_PLAYTREE,MSGL_V,"Detected reference-ini playlist format\n");
   play_tree_parser_stop_keeping(p);
@@ -335,7 +335,7 @@ parse_ref_ini(play_tree_parser_t* p) {
     return NULL;
   while(line) {
     strstrip(line);
-    if(strncasecmp(line,"Ref",3) == 0) {
+    if(av_strncasecmp(line,"Ref",3) == 0) {
       v = pls_entry_get_value(line+3);
       if(!v)
 	mp_msg(MSGT_PLAYTREE,MSGL_ERR,"No value in entry %s\n",line);
@@ -369,7 +369,7 @@ parse_m3u(play_tree_parser_t* p) {
   if (!(line = play_tree_parser_get_line(p)))
     return NULL;
   strstrip(line);
-  if(strcasecmp(line,"#EXTM3U"))
+  if(av_strcasecmp(line,"#EXTM3U"))
     return NULL;
   mp_msg(MSGT_PLAYTREE,MSGL_V,"Detected extended m3u playlist format\n");
   play_tree_parser_stop_keeping(p);
@@ -386,7 +386,7 @@ parse_m3u(play_tree_parser_t* p) {
      */
     if(line[0] == '#') {
 #if 0 /* code functional */
-      if(strncasecmp(line,"#EXTINF:",8) == 0) {
+      if(av_strncasecmp(line,"#EXTINF:",8) == 0) {
         mp_msg(MSGT_PLAYTREE,MSGL_INFO,"[M3U] Duration: %dsec  Title: %s\n",
           strtol(line+8,&line,10), line+2);
       }
@@ -423,12 +423,12 @@ parse_smil(play_tree_parser_t* p) {
     strstrip(line);
     if(line[0] == '\0') // Ignore empties
       continue;
-    if (strncasecmp(line,"<?xml",5)==0) // smil in xml
+    if (av_strncasecmp(line,"<?xml",5)==0) // smil in xml
       continue;
-    if (strncasecmp(line,"<!DOCTYPE smil",13)==0) // smil in xml
+    if (av_strncasecmp(line,"<!DOCTYPE smil",13)==0) // smil in xml
       continue;
-    if (strncasecmp(line,"<smil",5)==0 || strncasecmp(line,"<?wpl",5)==0 ||
-      strncasecmp(line,"(smil-document",14)==0)
+    if (av_strncasecmp(line,"<smil",5)==0 || av_strncasecmp(line,"<?wpl",5)==0 ||
+      av_strncasecmp(line,"(smil-document",14)==0)
       break; // smil header found
     else
       return NULL; //line not smil exit
@@ -438,7 +438,7 @@ parse_smil(play_tree_parser_t* p) {
   mp_msg(MSGT_PLAYTREE,MSGL_V,"Detected smil playlist format\n");
   play_tree_parser_stop_keeping(p);
 
-  if (strncasecmp(line,"(smil-document",14)==0) {
+  if (av_strncasecmp(line,"(smil-document",14)==0) {
     mp_msg(MSGT_PLAYTREE,MSGL_V,"Special smil-over-realrtsp playlist header\n");
     is_rmsmil = 1;
     if (sscanf(line, "(smil-document (ver 1.0)(npkt %u)(ttlpkt %u", &npkt, &ttlpkt) != 2) {
@@ -498,7 +498,7 @@ parse_smil(play_tree_parser_t* p) {
    while (pos) {
     if (!entrymode) { // all entries filled so far
      while ((pos=strchr(pos, '<'))) {
-      if (strncasecmp(pos,"<video",6)==0  || strncasecmp(pos,"<audio",6)==0 || strncasecmp(pos,"<media",6)==0) {
+      if (av_strncasecmp(pos,"<video",6)==0  || av_strncasecmp(pos,"<audio",6)==0 || av_strncasecmp(pos,"<media",6)==0) {
           entrymode=1;
           break; // Got a valid tag, exit '<' search loop
       }
@@ -689,7 +689,7 @@ static play_tree_t *parse_nsc(play_tree_parser_t* p) {
     strstrip(line);
     if(!line[0]) // Ignore empties
       continue;
-    if (strncasecmp(line,"[Address]", 9) == 0)
+    if (av_strncasecmp(line,"[Address]", 9) == 0)
       break; // nsc header found
     else
       return NULL;
@@ -700,19 +700,19 @@ static play_tree_t *parse_nsc(play_tree_parser_t* p) {
     strstrip(line);
     if (!line[0])
       continue;
-    if (strncasecmp(line, "Unicast URL=", 12) == 0) {
+    if (av_strncasecmp(line, "Unicast URL=", 12) == 0) {
       int len = decode_nsc_base64(&line[12], &unicast_url);
       if (len <= 0)
         mp_msg(MSGT_PLAYTREE, MSGL_WARN, "[nsc] Unsupported Unicast URL encoding\n");
       else
         utf16_to_ascii(unicast_url, len);
-    } else if (strncasecmp(line, "IP Address=", 11) == 0) {
+    } else if (av_strncasecmp(line, "IP Address=", 11) == 0) {
       int len = decode_nsc_base64(&line[11], &addr);
       if (len <= 0)
         mp_msg(MSGT_PLAYTREE, MSGL_WARN, "[nsc] Unsupported IP Address encoding\n");
       else
         utf16_to_ascii(addr, len);
-    } else if (strncasecmp(line, "IP Port=", 8) == 0) {
+    } else if (av_strncasecmp(line, "IP Port=", 8) == 0) {
       port = strtol(&line[8], NULL, 0);
     }
   }
@@ -771,7 +771,8 @@ play_tree_add_basepath(play_tree_t* pt, char* bp) {
     fl = strlen(pt->files[i]);
     // if we find a full unix path, url:// or X:\ at the beginning,
     // don't mangle it.
-    if(fl <= 0 || strstr(pt->files[i],"://") || (pt->files[i][0] == '/'))
+    if(fl <= 0 || strstr(pt->files[i],"://") || (pt->files[i][0] == '/')
+                                                                        )
       continue;
     // if the path begins with \ then prepend drive letter to it.
     if (pt->files[i][0] == '\\') {
