@@ -67,6 +67,7 @@ SRCS_COMMON = bstr.c                            \
               libvo/vo_omap_drm.c               \
               libvo/vo_omap_drm_egl.c           \
               libmpcodecs/ad.c                  \
+              libmpcodecs/ad_pcm.c              \
               libmpcodecs/dec_audio.c           \
               libmpcodecs/dec_video.c           \
               libmpcodecs/img_format.c          \
