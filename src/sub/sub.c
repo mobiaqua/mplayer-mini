@@ -957,6 +957,7 @@ void vo_draw_text_ext(int dxs, int dys, int left_border, int top_border,
 	switch(obj->type){
 	case OSDTYPE_OSD:
 	case OSDTYPE_SUBTITLE:
+	    break;
 	case OSDTYPE_PROGBAR:
 	    vo_draw_text_from_buffer(obj,draw_alpha);
 	    break;
