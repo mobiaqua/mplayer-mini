@@ -44,6 +44,7 @@
 #include "m_config.h"
 #include "m_option.h"
 #include "path.h"
+#include "ps3remote.h"
 
 /// This array defines all known commands.
 /// The first field is an id used to recognize the command without too many strcmp.
@@ -411,11 +412,9 @@ static int use_joystick = 1, use_lirc = 1, use_lircc = 1;
 static int default_bindings = 1;
 static char* config_file = "input.conf";
 
-/* Apple Remote */
-static int use_ar = 0;
+static int use_ps3remote = 1;
 
-static char* js_dev = NULL;
-static char* ar_dev = NULL;
+static char* ps3remote_dev = NULL;
 
 static char* in_file = NULL;
 static int in_file_fd = -1;
@@ -426,12 +425,8 @@ static int mp_input_print_cmd_list(m_option_t* cfg);
 // Our command line options
 static const m_option_t input_conf[] = {
   { "conf", &config_file, CONF_TYPE_STRING, CONF_GLOBAL, 0, 0, NULL },
-  { "ar-dev", &ar_dev, CONF_TYPE_STRING, CONF_GLOBAL, 0, 0, NULL },
-  { "ar-delay", &ar_delay, CONF_TYPE_INT, CONF_GLOBAL, 0, 0, NULL },
-  { "ar-rate", &ar_rate, CONF_TYPE_INT, CONF_GLOBAL, 0, 0, NULL },
   { "keylist", mp_input_print_key_list, CONF_TYPE_FUNC, CONF_GLOBAL, 0, 0, NULL },
   { "cmdlist", mp_input_print_cmd_list, CONF_TYPE_FUNC, CONF_GLOBAL, 0, 0, NULL },
-  { "js-dev", &js_dev, CONF_TYPE_STRING, CONF_GLOBAL, 0, 0, NULL },
   { "file", &in_file, CONF_TYPE_STRING, CONF_GLOBAL, 0, 0, NULL },
   { "default-bindings", &default_bindings, CONF_TYPE_FLAG, CONF_GLOBAL, 0, 1, NULL },
   { "nodefault-bindings", &default_bindings, CONF_TYPE_FLAG, CONF_GLOBAL, 1, 0, NULL },
@@ -440,14 +435,8 @@ static const m_option_t input_conf[] = {
 
 static const m_option_t mp_input_opts[] = {
   { "input", &input_conf, CONF_TYPE_SUBCONFIG, 0, 0, 0, NULL},
-  { "nojoystick", &use_joystick,  CONF_TYPE_FLAG, CONF_GLOBAL, 1, 0, NULL },
-  { "joystick", &use_joystick,  CONF_TYPE_FLAG, CONF_GLOBAL, 0, 1, NULL },
-  { "nolirc", &use_lirc, CONF_TYPE_FLAG, CONF_GLOBAL, 1, 0, NULL },
-  { "lirc", &use_lirc, CONF_TYPE_FLAG, CONF_GLOBAL, 0, 1, NULL },
-  { "nolircc", &use_lircc, CONF_TYPE_FLAG, CONF_GLOBAL, 1, 0, NULL },
-  { "lircc", &use_lircc, CONF_TYPE_FLAG, CONF_GLOBAL, 0, 1, NULL },
-  { "noar", &use_ar, CONF_TYPE_FLAG, CONF_GLOBAL, 1, 0, NULL },
-  { "ar", &use_ar, CONF_TYPE_FLAG, CONF_GLOBAL, 0, 1, NULL },
+  { "nops3remote", &use_ps3remote, CONF_TYPE_FLAG, CONF_GLOBAL, 1, 0, NULL },
+  { "ps3remote", &use_ps3remote, CONF_TYPE_FLAG, CONF_GLOBAL, 0, 1, NULL },
   { NULL, NULL, 0, 0, 0, 0, NULL}
 };
 
@@ -1554,6 +1543,14 @@ mp_input_init(void) {
     // free file if it was allocated by get_path()
     if( file != config_file)
       free(file);
+  }
+
+  if(use_ps3remote) {
+    int fd = mp_input_ps3remote_init(ps3remote_dev);
+    if(fd < 0)
+      mp_msg(MSGT_INPUT,MSGL_ERR,"Can't init PS3 BD Remote device.\n");
+    else
+      mp_input_add_key_fd(fd,1,mp_input_ps3remote_read,(mp_close_func_t)close);
   }
 
   if(in_file) {

@@ -86,6 +86,7 @@ SRCS_COMMON = bstr.c                            \
               libmpdemux/mp_taglists.c          \
               libmpdemux/video.c                \
               input/input.c                     \
+              input/ps3remote.c                 \
               osdep/getch2.c                    \
               osdep/timer-linux.c               \
               osdep/shmem.c                     \
