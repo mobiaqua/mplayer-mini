@@ -676,8 +676,14 @@ echores "$_iconv"
 echocheck "clock_gettime()"
 clock_gettime=no
 def_clock_gettime='#undef HAVE_CLOCK_GETTIME'
-statement_check_broken stddef.h time.h 'struct timespec tp; clock_gettime(CLOCK_MONOTONIC, &tp)' -lrt &&
-    { clock_gettime=yes ; def_clock_gettime='#define HAVE_CLOCK_GETTIME 1' ; extra_ldflags="$extra_ldflags -lrt" ; }
+for ld_tmp in "" "-lrt" ; do
+  if statement_check_broken stddef.h time.h 'struct timespec tp; clock_gettime(CLOCK_MONOTONIC, &tp)' $ld_tmp ; then
+    clock_gettime=yes
+    def_clock_gettime='#define HAVE_CLOCK_GETTIME 1'
+    extra_ldflags="$extra_ldflags $ld_tmp"
+    break
+  fi
+done
 echores "$clock_gettime"
 
 
@@ -833,7 +839,7 @@ test "$_debug" != "" && def_debug='#define MP_DEBUG 1'
 
 CFLAGS="$CFLAGS -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE"
 
-CXXFLAGS=" $CFLAGS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS"
+CXXFLAGS=" $CFLAGS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=c++98"
 
 extra_ldflags="$extra_ldflags $libm"
 
@@ -841,14 +847,13 @@ extra_ldflags="$extra_ldflags $libm"
 
 mak_enable () {
 list=$(echo $1 | toupper)
-item=$(echo $2 | toupper)
+item=" $(echo $2 | toupper) "
 nprefix=$3;
 for part in $list; do
-  if $(echo $item | grep -q -E "(^| )$part($| )"); then
-    echo "${nprefix}_$part = yes"
-  else
-    echo "${nprefix}_$part = no"
-  fi
+  case "$item" in
+    *" $part "*) echo "$name = yes" ;;
+    *) echo "!$name = yes" ;;
+  esac
 done
 }
 
@@ -906,17 +911,16 @@ EOF
 
 ff_config_enable () {
 list=$(echo $1 | toupper)
-item=$(echo $2 | toupper)
+item=" $(echo $2 | toupper) "
 _nprefix=$4;
 _defineprefix=$3;
 _postfix=$5;
 test -z "$_nprefix" && _nprefix='CONFIG'
 for part in $list; do
-  if $(echo $item | grep -q -E "(^| )$part($| )"); then
-    echo "${_defineprefix}define ${_nprefix}_${part}${_postfix} 1"
-  else
-    echo "${_defineprefix}define ${_nprefix}_${part}${_postfix} 0"
-  fi
+  case "$item" in
+    *" $part "*) echo "${_defineprefix}define ${_nprefix}_${part}${_postfix} 1" ;;
+    *) echo "${_defineprefix}define ${_nprefix}_${part}${_postfix} 0" ;;
+  esac
 done
 }
 
