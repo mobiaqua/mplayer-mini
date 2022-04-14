@@ -173,7 +173,6 @@ static int preinit(const char *arg) {
 	uint32_t handles[4] = { 0 }, pitches[4] = { 0 }, offsets[4] = { 0 };
 	struct gbm_bo *gbmBo;
 	DrmFb *drmFb;
-	const char *extensions;
 	drmModeConnectorPtr connector = NULL;
 	EGLint major, minor;
 	EGLint numConfig;
@@ -421,9 +420,8 @@ static int preinit(const char *arg) {
 		goto fail;
 	}
 
-	extensions = (char *)glGetString(GL_EXTENSIONS);
-	if (!strstr(extensions, "GL_TI_image_external_raw_video")) {
-		mp_msg(MSGT_VO, MSGL_FATAL, "[omap_drm_egl] preinit() No GL_TI_image_external_raw_video extension!\n");
+	if (!strstr(eglQueryString(_eglDisplay, EGL_EXTENSIONS), "EGL_EXT_image_dma_buf_import")) {
+		mp_msg(MSGT_VO, MSGL_FATAL, "[omap_drm_egl] preinit() No EGL_EXT_image_dma_buf_import extension!\n");
 		goto fail;
 	}
 
@@ -684,7 +682,7 @@ static int getDisplayVideoBuffer(DisplayVideoBuffer *handle, uint32_t pixelfmt, 
 	memset(renderTexture, 0, sizeof (RenderTexture));
 
 	if (pixelfmt == IMGFMT_YV12 || pixelfmt == IMGFMT_NV12) {
-		fourcc = FOURCC_TI_NV12;
+		fourcc = DRM_FORMAT_NV12;
 		stride = width;
 		fbSize = width * height * 3 / 2;
 	} else {
@@ -699,15 +697,15 @@ static int getDisplayVideoBuffer(DisplayVideoBuffer *handle, uint32_t pixelfmt, 
 	handle->dmaBuf = renderTexture->dmabuf = omap_bo_dmabuf(renderTexture->bo);
 	{
 		EGLint attr[] = {
-			EGL_GL_VIDEO_FOURCC_TI,      (EGLint)fourcc,
-			EGL_GL_VIDEO_WIDTH_TI,       (EGLint)width,
-			EGL_GL_VIDEO_HEIGHT_TI,      (EGLint)height,
-			EGL_GL_VIDEO_BYTE_SIZE_TI,   (EGLint)omap_bo_size(renderTexture->bo),
-			EGL_GL_VIDEO_BYTE_STRIDE_TI, (EGLint)stride,
-			EGL_GL_VIDEO_YUV_FLAGS_TI,   EGLIMAGE_FLAGS_YUV_CONFORMANT_RANGE | EGLIMAGE_FLAGS_YUV_BT601,
+			EGL_WIDTH,                      (EGLint)width,
+			EGL_HEIGHT,                     (EGLint)height,
+			EGL_LINUX_DRM_FOURCC_EXT,       (EGLint)fourcc,
+			EGL_DMA_BUF_PLANE0_FD_EXT,      (EGLint)renderTexture->dmabuf,
+			EGL_DMA_BUF_PLANE0_OFFSET_EXT,  0,
+			EGL_DMA_BUF_PLANE0_PITCH_EXT,   (EGLint)stride,
 			EGL_NONE
 		};
-		renderTexture->image = eglCreateImageKHR(_eglDisplay, EGL_NO_CONTEXT, EGL_RAW_VIDEO_TI_DMABUF, (EGLClientBuffer)renderTexture->dmabuf, attr);
+		renderTexture->image = eglCreateImageKHR(_eglDisplay, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, (EGLClientBuffer)0, attr);
 		if (renderTexture->image == EGL_NO_IMAGE_KHR) {
 			mp_msg(MSGT_VO, MSGL_FATAL, "[omap_drm_egl] getDisplayVideoBuffer() failed to bind texture, error: %s\n", eglGetErrorStr(eglGetError()));
 			goto fail;
