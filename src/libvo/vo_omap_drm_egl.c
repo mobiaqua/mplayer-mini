@@ -691,7 +691,7 @@ static int getDisplayVideoBuffer(DisplayVideoBuffer *handle, uint32_t pixelfmt, 
 	}
 
 	handle->locked = 0;
-	handle->bo = renderTexture->bo = omap_bo_new(_omapDevice, fbSize, OMAP_BO_WC);
+	handle->bo = renderTexture->bo = omap_bo_new(_omapDevice, fbSize, OMAP_BO_WC | OMAP_BO_SCANOUT);
 	handle->boHandle = omap_bo_handle(handle->bo);
 	renderTexture->mapPtr = omap_bo_map(handle->bo);
 	handle->dmaBuf = renderTexture->dmabuf = omap_bo_dmabuf(renderTexture->bo);

@@ -436,7 +436,7 @@ static int init(sh_video_t *sh) {
 		goto fail;
 	}
 
-	_inputBufBo = omap_bo_new(_omapDev, _frameWidth * _frameHeight, OMAP_BO_WC);
+	_inputBufBo = omap_bo_new(_omapDev, _frameWidth * _frameHeight, OMAP_BO_WC | OMAP_BO_SCANOUT);
 	if (!_inputBufBo) {
 		mp_msg(MSGT_DECVIDEO, MSGL_FATAL, "[vd_omap_dce] init() Failed create input buffer\n");
 		goto fail;
