@@ -741,11 +741,11 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags){
     mp_packet_split_side_data(&pkt);
     if (av_packet_get_side_data(&pkt, AV_PKT_DATA_PALETTE, NULL))
         ctx->palette_sent = 1;
-    if (sh->ds->buffer_pos < len)
+    if (!sh->needs_parsing && sh->ds->buffer_pos < len)
         mp_msg(MSGT_DECVIDEO, MSGL_ERR, "Bad stream state, please report as bug!\n");
     ret = avcodec_send_packet(avctx, !pkt.data && !pkt.size ? NULL : &pkt);
     if (ret == AVERROR(EAGAIN)) {
-        if (sh->ds->buffer_pos >= len) sh->ds->buffer_pos -= len;
+        if (!sh->needs_parsing && sh->ds->buffer_pos >= len) sh->ds->buffer_pos -= len;
         ret = 0;
     }
     if (ret >= 0 || ret == AVERROR_EOF) {

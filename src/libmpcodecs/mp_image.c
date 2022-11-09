@@ -49,8 +49,12 @@ void mp_image_alloc_planes(mp_image_t *mpi) {
   }
     mpi->planes[0]=av_malloc(mpi->bpp*mpi->width*(mpi->height+2)/8+
                             mpi->chroma_width*mpi->chroma_height);
-  } else
-    mpi->planes[0]=av_malloc(mpi->bpp*mpi->width*(mpi->height+2)/8);
+  } else {
+    // for odd width round up to be on the safe side,
+    // required in particular for planar formats
+    int alloc_w = mpi->width + (mpi->width & 1);
+    mpi->planes[0]=av_malloc(mpi->bpp*alloc_w*(mpi->height+2)/8);
+  }
   if (mpi->flags&MP_IMGFLAG_PLANAR) {
     int bpp = IMGFMT_IS_YUVP16(mpi->imgfmt)? 2 : 1;
     // YV12/I420/YVU9/IF09. feel free to add other planar formats here...
@@ -161,6 +165,11 @@ void mp_image_setfmt(mp_image_t* mpi,unsigned int out_fmt){
         mpi->bpp = mp_get_chroma_shift(out_fmt, &mpi->chroma_x_shift, &mpi->chroma_y_shift, NULL);
         mpi->chroma_width  = mpi->width  >> mpi->chroma_x_shift;
         mpi->chroma_height = mpi->height >> mpi->chroma_y_shift;
+        // ensure enough space for odd sizes
+        if ((mpi->chroma_width << mpi->chroma_x_shift) < mpi->width)
+            ++mpi->chroma_width;
+        if ((mpi->chroma_height << mpi->chroma_y_shift) < mpi->height)
+            ++mpi->chroma_height;
     }
     switch(out_fmt){
     case IMGFMT_I420:
@@ -239,7 +248,7 @@ void mp_image_setfmt(mp_image_t* mpi,unsigned int out_fmt){
         mpi->bpp=12;
         mpi->num_planes=2;
         mpi->chroma_width=(mpi->width>>0);
-        mpi->chroma_height=(mpi->height>>1);
+        mpi->chroma_height=(mpi->height+1)>>1;
         mpi->chroma_x_shift=0;
         mpi->chroma_y_shift=1;
         return;

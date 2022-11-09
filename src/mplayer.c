@@ -463,6 +463,7 @@ void uninit_player(unsigned int mask)
         mpctx->mixer.afilter = NULL;
     }
 
+    // VCODEC is also used for video filters
     if (mask & INITIALIZED_VCODEC) {
         initialized_flags &= ~INITIALIZED_VCODEC;
         current_module     = "uninit_vcodec";
@@ -1892,8 +1893,11 @@ int reinit_video_chain(void)
     if (stream_control(mpctx->demuxer->stream, STREAM_CTRL_GET_ASPECT_RATIO, &ar) != STREAM_UNSUPPORTED)
         mpctx->sh_video->stream_aspect = ar;
     current_module = "init_video_filters";
+    // Used also for video filters
+    initialized_flags |= INITIALIZED_VCODEC;
     {
         char *vf_arg[] = { "_oldargs_", (char *)mpctx->video_out, NULL };
+        if (sh_video->vfilter) vf_uninit_filter_chain(sh_video->vfilter);
         sh_video->vfilter = vf_open_filter(NULL, "vo", vf_arg);
     }
     sh_video->vfilter = append_filters(sh_video->vfilter);
@@ -1910,6 +1914,7 @@ int reinit_video_chain(void)
         goto err_out;
     }
 
+    // This should already be set as it's also used for video filters
     initialized_flags |= INITIALIZED_VCODEC;
 
     if (sh_video->codec)
@@ -1926,7 +1931,10 @@ int reinit_video_chain(void)
     return 1;
 
 err_out:
-    mpctx->sh_video = mpctx->d_video->sh = NULL;
+    uninit_player(INITIALIZED_VCODEC);
+    // ensure we do not try to play video even if we
+    // failed before vfilter creation.
+    mpctx->sh_video = NULL;
     return 0;
 }
 
@@ -1948,7 +1956,7 @@ static double update_video(int *blit_frame)
         void *decoded_frame  = NULL;
         int drop_frame       = 0;
         int in_size;
-        int full_frame;
+        int full_frame = 0;
 
         do {
             int flush;
