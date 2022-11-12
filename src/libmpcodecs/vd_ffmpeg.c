@@ -374,7 +374,6 @@ static int init(sh_video_t *sh){
     set_dr_slice_settings(avctx, lavc_codec);
     avctx->thread_count = lavc_param_threads;
     avctx->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
-    avctx->refcounted_frames = 1;
 
     /* open it */
     if (avcodec_open2(avctx, lavc_codec, &opts) < 0) {

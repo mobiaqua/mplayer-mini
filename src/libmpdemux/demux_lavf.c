@@ -41,6 +41,8 @@
 #include "libavutil/mathematics.h"
 #include "libavutil/opt.h"
 #include "libavutil/replaygain.h"
+#include "libavcodec/avcodec.h"
+#include "libavcodec/bsf.h"
 
 #define INITIAL_PROBE_SIZE STREAM_BUFFER_MIN
 #define SMALL_MAX_PROBE_SIZE (32 * 1024)
@@ -277,7 +279,6 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
     lavf_priv_t *priv= demuxer->priv;
     AVStream *st= avfc->streams[i];
     AVCodecParameters *codec= st->codecpar;
-    AVCodecContext *codec_ctx= st->codec;
     char *stream_type = NULL;
     int stream_id;
     AVDictionaryEntry *lang = av_dict_get(st->metadata, "language", NULL, 0);
@@ -393,7 +394,15 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
             if(demuxer->video->id != i)
                 st->discard= AVDISCARD_ALL;
             stream_id = priv->video_streams++;
-            if (codec->codec_id == AV_CODEC_ID_H264) {
+
+            const AVCodec *avc = avcodec_find_decoder(codec->codec_id);
+            AVCodecContext *codec_ctx = avcodec_alloc_context3(avc);
+            if (avcodec_parameters_to_context(codec_ctx, codec) < 0) {
+                mp_msg(MSGT_DEMUX, MSGL_FATAL, "Error copy codec paramters\n");
+                avcodec_free_context(&codec_ctx);
+                codec_ctx = NULL;
+            }
+            if (codec_ctx && codec->codec_id == AV_CODEC_ID_H264) {
                 if (codec->extradata && codec->extradata_size > 0 && codec->extradata[0] == 1) {
                     if (!bsf_handle) {
                         const AVBitStreamFilter *bsf = av_bsf_get_by_name("h264_mp4toannexb");
@@ -421,7 +430,7 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
                         mp_msg(MSGT_DEMUX, MSGL_FATAL, "Error enable h264_mp4toannexb filter\n");
                 }
             }
-            if (codec->codec_id == AV_CODEC_ID_MPEG4) {
+            if (codec_ctx && codec->codec_id == AV_CODEC_ID_MPEG4) {
                 if (!bsf_handle) {
                     const AVBitStreamFilter *bsf = av_bsf_get_by_name("mpeg4_unpack_bframes");
                     if (bsf) {
@@ -447,6 +456,8 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
                 if (!bsf_handle)
                     mp_msg(MSGT_DEMUX, MSGL_FATAL, "Error enable h264_mp4toannexb filter\n");
             }
+            if (codec_ctx)
+                avcodec_free_context(&codec_ctx);
             break;
         }
         case AVMEDIA_TYPE_SUBTITLE:{
