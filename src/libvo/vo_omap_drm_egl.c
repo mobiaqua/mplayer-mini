@@ -43,7 +43,7 @@
 #include <libswscale/swscale.h>
 #include <xf86drmMode.h>
 #include <drm_fourcc.h>
-#include <gbm/gbm.h>
+#include <gbm.h>
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 #include <EGL/egl.h>
