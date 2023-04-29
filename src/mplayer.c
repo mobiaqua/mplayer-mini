@@ -495,6 +495,7 @@ void uninit_player(unsigned int mask)
         if (mpctx->audio_out)
             mpctx->audio_out->uninit(mpctx->eof ? 0 : 1);
         mpctx->audio_out = NULL;
+        mpctx->mixer.audio_out = NULL;
     }
 
     if (mask & INITIALIZED_VO) {
@@ -2943,9 +2944,6 @@ goto_next_file:  // don't jump here after ao/vo/getch initialization!
                    (total_time_usage > 0.5) ? (total_frame_cnt / total_time_usage) : 0);
     }
 
-    // time to uninit all, except global stuff:
-    uninit_player(INITIALIZED_ALL - (INITIALIZED_GUI + INITIALIZED_INPUT + (fixed_vo ? INITIALIZED_VO : 0)));
-
     if (mpctx->eof == PT_NEXT_ENTRY || mpctx->eof == PT_PREV_ENTRY) {
         mpctx->eof = mpctx->eof == PT_NEXT_ENTRY ? 1 : -1;
         if (play_tree_iter_step(mpctx->playtree_iter, mpctx->play_tree_step, 0) == PLAY_TREE_ITER_ENTRY) {
@@ -2989,6 +2987,10 @@ goto_next_file:  // don't jump here after ao/vo/getch initialization!
         if (!mpctx->playtree_iter && !use_gui)
             filename = NULL;
         mpctx->eof = 0;
+
+        // time to uninit all, except global stuff:
+        uninit_player(INITIALIZED_ALL - (INITIALIZED_GUI + INITIALIZED_INPUT + (fixed_vo ? INITIALIZED_VO : 0)));
+
         goto play_next_file;
     }
 
