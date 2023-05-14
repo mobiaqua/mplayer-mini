@@ -672,10 +672,10 @@ static uint32_t put_image(mp_image_t *mpi) {
 			nv12_frame_info.y_stride = frame_width;
 			nv12_frame_info.uv_stride = frame_width;
 
-			yuv420_to_nv12_open(&yuv420_frame_info, &nv12_frame_info);
+			//yuv420_to_nv12_open(&yuv420_frame_info, &nv12_frame_info);
 
 			omap_bo_cpu_prep(_videoBuffers[_currentVideoBuffer]->bo, OMAP_GEM_WRITE);
-			yuv420_to_nv12_convert(dstPtr, srcPtr, NULL, NULL);
+			//yuv420_to_nv12_convert(dstPtr, srcPtr, NULL, NULL);
 			omap_bo_cpu_fini(_videoBuffers[_currentVideoBuffer]->bo, OMAP_GEM_WRITE);
 		} else if (mpi->imgfmt == IMGFMT_YV12) {
 			srcPtr[0] = mpi->planes[0];

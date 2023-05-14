@@ -64,7 +64,6 @@ SRCS_COMMON = bstr.c                            \
               libvo/aspect.c                    \
               libvo/geometry.c                  \
               libvo/video_out.c                 \
-              libvo/yuv420_to_nv12.S            \
               libvo/vo_omap_drm.c               \
               libvo/vo_omap_drm_egl.c           \
               libmpcodecs/ad.c                  \
