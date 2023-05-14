@@ -21,10 +21,15 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <unistd.h>
+
+#include "config.h"
+
+#if OMAP_DCE
 
 #define xdc_target_types__ gnu/targets/std.h
 #include <xdc/std.h>
@@ -37,8 +42,6 @@
 #include <ti/sdo/codecs/vc1vdec/ivc1vdec.h>
 #include <libdce.h>
 #include <libdrm/omap_drmif.h>
-
-#include "config.h"
 
 #include "mp_msg.h"
 #include "help_mp.h"
@@ -743,3 +746,5 @@ static mp_image_t *decode(sh_video_t *sh, void *data, int len, int flags) {
 
 	return _mpi;
 }
+
+#endif

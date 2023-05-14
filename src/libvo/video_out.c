@@ -93,13 +93,17 @@ char *vo_wintitle;
 //
 // Externally visible list of all vo drivers
 //
+#if OMAP_DRM
 extern const vo_functions_t video_out_omap_drm;
 extern const vo_functions_t video_out_omap_drm_egl;
+#endif
 
 const vo_functions_t* const video_out_drivers[] =
 {
+#if OMAP_DRM
         &video_out_omap_drm,
         &video_out_omap_drm_egl,
+#endif
         NULL
 };
 

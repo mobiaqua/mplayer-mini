@@ -27,5 +27,12 @@
 #undef CONFIG_CRASH_DEBUG
 #endif
 
+#ifndef OMAP_DRM
+#define OMAP_DRM 1
+#endif
+
+#ifndef OMAP_DCE
+#define OMAP_DCE 1
+#endif
 
 #endif /* MPLAYER_CONFIG_H */

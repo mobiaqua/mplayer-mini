@@ -37,7 +37,9 @@
 #include "vf.h"
 
 extern const vd_functions_t mpcodecs_vd_ffmpeg;
+#if OMAP_DCE
 extern const vd_functions_t mpcodecs_vd_omap_dce;
+#endif
 
 /* Please do not add any new decoders here. If you want to implement a new
  * decoder, add it to libavcodec, except for wrappers around external
@@ -45,7 +47,9 @@ extern const vd_functions_t mpcodecs_vd_omap_dce;
 
 const vd_functions_t * const mpcodecs_vd_drivers[] = {
     &mpcodecs_vd_ffmpeg,
+#if OMAP_DCE
     &mpcodecs_vd_omap_dce,
+#endif
     NULL
 };
 

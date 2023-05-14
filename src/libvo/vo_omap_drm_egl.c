@@ -30,6 +30,7 @@
 #include <sys/mman.h>
 
 #include "config.h"
+#if OMAP_DRM
 #include "aspect.h"
 
 #include "video_out.h"
@@ -1092,3 +1093,5 @@ static int control(uint32_t request, void *data) {
 
 	return VO_NOTIMPL;
 }
+
+#endif
