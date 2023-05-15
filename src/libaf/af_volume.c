@@ -125,6 +125,7 @@ static av_always_inline void s16_inner_loop(int16_t *data, int len, int offset, 
 static av_always_inline void float_inner_loop(float *data, int len, int offset, int step, float level, int softclip)
 {
   int i;
+#if HAVE_NEON && !ARCH_AARCH64
   if (offset == 0 && step == 1 && !softclip && len >= 8)
   {
     __asm__(
@@ -144,6 +145,7 @@ static av_always_inline void float_inner_loop(float *data, int len, int offset, 
     : "cc", "q0", "d2", "q8", "q9", "memory");
     len &= 3;
   }
+#endif
   for (i = offset; i < len; i += step)
   {
     register float x = data[i];

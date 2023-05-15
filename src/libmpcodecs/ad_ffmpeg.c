@@ -189,6 +189,7 @@ static av_always_inline void copy_samples_planar(size_t bps,
 {
     size_t s, c, o = 0;
 
+#if HAVE_NEON_INLINE && !ARCH_AARCH64
     if (nb_channels == 2 && bps == 4) {
         const unsigned char *src0 = src[0];
         const unsigned char *src1 = src[1];
@@ -226,7 +227,7 @@ static av_always_inline void copy_samples_planar(size_t bps,
         o += aligned*bps;
         nb_samples -= aligned;
     }
-
+#endif
     for (s = 0; s < nb_samples; s++) {
         for (c = 0; c < nb_channels; c++) {
             memcpy(dst, src[c] + o, bps);

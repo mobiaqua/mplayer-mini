@@ -481,6 +481,7 @@ static void float2int(const float* in, void* out, int len, int bps)
       ((int8_t *)out)[i] = av_clip_int8(lrintf(128.0f * in[i]));
     break;
   case(2):
+#if HAVE_NEON && !ARCH_AARCH64
     {
     const float *in_end = in + len;
     while (in < in_end - 7) {
@@ -504,6 +505,10 @@ static void float2int(const float* in, void* out, int len, int bps)
       :: "d0", "memory");
     }
     }
+#else
+    for(i=0;i<len;i++)
+      ((int16_t*)out)[i] = av_clip_int16(lrintf(32768.0f * in[i]));
+#endif
     break;
   case(3):
     for(i=0;i<len;i++){
