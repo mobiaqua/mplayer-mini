@@ -94,6 +94,7 @@ SRCS_COMMON = bstr.c                            \
               stream/open.c                     \
               stream/stream.c                   \
               stream/stream_file.c              \
+              stream/stream_ffmpeg.c            \
               sub/find_sub.c                    \
               sub/osd.c                         \
               sub/sub.c                         \

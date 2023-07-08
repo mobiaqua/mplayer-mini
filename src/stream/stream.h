@@ -157,6 +157,7 @@ typedef struct stream {
   unsigned int cache_pid;
   void* cache_data;
   void* priv; // used for DVD, TV, RTSP etc
+  char* url;  // strdup() of filename/url
   unsigned char buffer[STREAM_BUFFER_SIZE>STREAM_MAX_SECTOR_SIZE?STREAM_BUFFER_SIZE:STREAM_MAX_SECTOR_SIZE];
   FILE *capture_file;
 } stream_t;

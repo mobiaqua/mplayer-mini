@@ -45,9 +45,11 @@
 
 static int (*stream_check_interrupt_cb)(int time) = NULL;
 
+extern const stream_info_t stream_info_ffmpeg;
 extern const stream_info_t stream_info_file;
 
 static const stream_info_t* const auto_open_streams[] = {
+  &stream_info_ffmpeg,
   &stream_info_file,
   NULL
 };
@@ -85,9 +87,11 @@ static stream_t* open_stream_plugin(const stream_info_t* sinfo, const char* file
   }
   s = new_stream(-2,-2);
   s->capture_file = NULL;
+  s->url=strdup(filename);
   s->flags |= mode;
   *ret = sinfo->open(s,mode,arg,file_format);
   if((*ret) != STREAM_OK) {
+    free(s->url);
     free(s);
     return NULL;
   }
@@ -364,6 +368,7 @@ stream_t* new_stream(int fd,int type){
   s->buf_pos=s->buf_len=0;
   s->start_pos=s->end_pos=0;
   s->priv=NULL;
+  s->url=NULL;
   s->cache_pid=0;
   stream_reset(s);
   return s;
@@ -387,6 +392,7 @@ void free_stream(stream_t *s){
   // Disabled atm, i don't like that. s->priv can be anything after all
   // streams should destroy their priv on close
   //free(s->priv);
+  free(s->url);
   free(s);
 }
 
