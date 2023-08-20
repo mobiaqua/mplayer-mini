@@ -38,6 +38,7 @@
 #include "libavformat/avio.h"
 #include "libavutil/avutil.h"
 #include "libavutil/avstring.h"
+#include "libavutil/display.h"
 #include "libavutil/mathematics.h"
 #include "libavutil/opt.h"
 #include "libavutil/replaygain.h"
@@ -283,7 +284,6 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
     int stream_id;
     AVDictionaryEntry *lang = av_dict_get(st->metadata, "language", NULL, 0);
     AVDictionaryEntry *title= av_dict_get(st->metadata, "title",    NULL, 0);
-    AVDictionaryEntry *rot  = av_dict_get(st->metadata, "rotate",   NULL, 0);
     int g;
 
     switch(codec->codec_type){
@@ -344,6 +344,8 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
             break;
         }
         case AVMEDIA_TYPE_VIDEO:{
+            AVDictionaryEntry *rot = av_dict_get(st->metadata, "rotate",   NULL, 0);
+            const int32_t *disp_matrix = av_stream_get_side_data(st, AV_PKT_DATA_DISPLAYMATRIX, NULL);
             sh_video_t* sh_video;
             sh_video=new_sh_video_vid(demuxer, i, priv->video_streams);
             if(!sh_video) break;
@@ -378,6 +380,8 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
                 sh_video->default_track = 1;
             if (rot && rot->value)
                 mp_msg(MSGT_IDENTIFY, MSGL_INFO, "ID_VID_%d_ROTATE=%s\n", priv->video_streams, rot->value);
+            else if (disp_matrix)
+                mp_msg(MSGT_IDENTIFY, MSGL_INFO, "ID_VID_%d_ROTATE=%f\n", priv->video_streams, (float)av_display_rotation_get(disp_matrix));
             mp_msg(MSGT_DEMUX,MSGL_DBG2,"stream aspect= %d*%d/(%d*%d)\n",
                 codec->width, st->sample_aspect_ratio.num,
                 codec->height, st->sample_aspect_ratio.den);
