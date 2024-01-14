@@ -18,7 +18,7 @@ cd ${OE_BASE}/build-${DISTRO}-${TARGET} && \
 		echo
 		rm -rf sysroot-native sysroot
 		cp -R ${OE_BASE}/build-${DISTRO}-${TARGET}/tmp/work/*-linux-gnueabi/external-sdk/*/recipe-sysroot-native sysroot-native/
-		cp -R ${OE_BASE}/build-${DISTRO}-${TARGET}/tmp/work/*-linux-gnueabi/external-sdk/*/recipe-sysroot sysroot/
+		cp -R ${OE_BASE}/build-${DISTRO}-${TARGET}/tmp/work/*-linux-gnueabi/external-sdk/*/recipe-sysroot sysroot-arm/
 	} && \
 	${OE_BASE}/bitbake/bin/bitbake external-sdk -cclean && {
 		echo
