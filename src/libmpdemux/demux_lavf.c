@@ -295,9 +295,8 @@ static void handle_stream(demuxer_t *demuxer, AVFormatContext *avfc, int i) {
             stream_type = "audio";
             priv->astreams[priv->audio_streams] = i;
             codec->codec_tag = mp_codec_id2tag(codec->codec_id, codec->codec_tag, 1);
-            sh_audio->channel_layout = codec->channel_layout;
             sh_audio->format= codec->codec_tag;
-            sh_audio->channels= codec->channels;
+            sh_audio->channels= codec->ch_layout.nb_channels;
             sh_audio->samplerate= codec->sample_rate;
             sh_audio->i_bps= codec->bit_rate/8;
             switch (codec->codec_id) {
