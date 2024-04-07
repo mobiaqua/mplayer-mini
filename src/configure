@@ -293,6 +293,7 @@ type freetype-config >/dev/null 2>&1 && _freetypeconfig=freetype-config
 _pthreads=auto
 _mpg123=auto
 _termcap=auto
+_omapdce=no
 
 option_value(){
   echo $(echo $* | cut -d '=' -f 2-)
@@ -335,6 +336,10 @@ for ac_option do
 
   --with-freetype-config=*)
     _freetypeconfig=$(option_value $ac_option)
+    ;;
+
+  --omapdce=*)
+    _omapdce=$(option_value $ac_option)
     ;;
 
   --extra-cflags=*)
@@ -811,6 +816,12 @@ if test "$_termcap" = yes ; then
 fi
 echores "$_termcap"
 
+
+if test "$_omapdce" = yes ; then
+    extra_cflags="$extra_cflags $($_freetypeconfig --cflags) $(pkg-config --cflags libdrm) $(pkg-config --cflags libdce) $(pkg-config --cflags gbm) $(pkg-config --cflags egl) -DOMAP_DRM=1 -DOMAP_DCE=1"
+    extra_ldflags="$extra_ldflags $($_freetypeconfig --libs) $(pkg-config --libs libdrm) $(pkg-config --libs libdce) $(pkg-config --libs gbm) $(pkg-config --libs egl) -lGLESv2"
+fi
+echores "$_omapdce"
 
 #############################################################################
 
