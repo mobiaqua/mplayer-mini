@@ -450,8 +450,9 @@ static void uninit(void) {
 			if (_videoBuffers[i] && _videoBuffers[i]->bo) {
 				omap_bo_del(_videoBuffers[i]->bo);
 			}
+			memset(_videoBuffers[i], 0, sizeof(VideoBuffer));
+			_videoBuffers[i] = NULL;
 		}
-		memset(_videoBuffers, 0, sizeof(VideoBuffer) * NUM_VIDEO_FB);
 	}
 
 	if (_oldCrtc) {
