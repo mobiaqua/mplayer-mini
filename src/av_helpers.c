@@ -111,37 +111,39 @@ int lavc_encode_audio(AVCodecContext *ctx, void *src, int src_len, void *dst, in
 {
     void *orig_src = src;
     int bps = av_get_bytes_per_sample(ctx->sample_fmt);
-    int planar = ctx->ch_layout.nb_channels > 1 && av_sample_fmt_is_planar(ctx->sample_fmt);
+    int channels = ctx->ch_layout.nb_channels;
+    int planar = channels > 1 && av_sample_fmt_is_planar(ctx->sample_fmt);
     int isac3 = ctx->codec->id == AV_CODEC_ID_AC3;
     int n;
     int got;
     AVPacket pkt;
     AVFrame *frame = av_frame_alloc();
-    if ((ctx->ch_layout.nb_channels == 6 || ctx->ch_layout.nb_channels == 5) &&
+    if ((channels == 6 || channels == 5) &&
         (isac3 || !strcmp(ctx->codec->name,"libfaac"))) {
         reorder_channel_nch(src, AF_CHANNEL_LAYOUT_MPLAYER_DEFAULT,
                             isac3 ? AF_CHANNEL_LAYOUT_LAVC_DEFAULT : AF_CHANNEL_LAYOUT_AAC_DEFAULT,
-                            ctx->ch_layout.nb_channels,
+                            channels,
                             src_len / bps, bps);
     }
-    frame->nb_samples = src_len / ctx->ch_layout.nb_channels / bps;
+    frame->nb_samples = src_len / channels / bps;
     if (planar) {
         // TODO: this is horribly inefficient.
         int ch;
         src = av_mallocz(src_len);
-        for (ch = 0; ch < ctx->ch_layout.nb_channels; ch++) {
+        for (ch = 0; ch < channels; ch++) {
             uint8_t *tmps = (uint8_t *)orig_src + ch*bps;
-            uint8_t *tmpd = (uint8_t *)src + ch*src_len/ctx->ch_layout.nb_channels;
+            uint8_t *tmpd = (uint8_t *)src + ch*src_len/channels;
             int s;
             for (s = 0; s < frame->nb_samples; s++) {
                 memcpy(tmpd, tmps, bps);
-                tmps += ctx->ch_layout.nb_channels * bps;
+                tmps += channels * bps;
                 tmpd += bps;
             }
         }
     }
     frame->format = ctx->sample_fmt;
-    n = avcodec_fill_audio_frame(frame, ctx->ch_layout.nb_channels, ctx->sample_fmt, src, src_len, 1);
+    frame->ch_layout.nb_channels = channels;
+    n = avcodec_fill_audio_frame(frame, channels, ctx->sample_fmt, src, src_len, 1);
     if (n < 0) return 0;
     n = avcodec_send_frame(ctx, frame);
     av_init_packet(&pkt);
