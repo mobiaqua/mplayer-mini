@@ -24,7 +24,8 @@
 #ifndef MPLAYER_PS3REMOTE_H
 #define MPLAYER_PS3REMOTE_H
 
-int mp_input_ps3remote_init(char* dev);
+int mp_input_ps3remote_init(void);
+void mp_input_ps3remote_close(int fd);
 int mp_input_ps3remote_read(int fd);
 
 #endif /* MPLAYER_PS3REMOTE_H */

@@ -414,8 +414,6 @@ static char* config_file = "input.conf";
 
 static int use_ps3remote = 1;
 
-static char* ps3remote_dev = NULL;
-
 static char* in_file = NULL;
 static int in_file_fd = -1;
 
@@ -1546,11 +1544,11 @@ mp_input_init(void) {
   }
 
   if(use_ps3remote) {
-    int fd = mp_input_ps3remote_init(ps3remote_dev);
+    int fd = mp_input_ps3remote_init();
     if(fd < 0)
       mp_msg(MSGT_INPUT,MSGL_ERR,"Can't init PS3 BD Remote device.\n");
     else
-      mp_input_add_key_fd(fd,1,mp_input_ps3remote_read,(mp_close_func_t)close);
+      mp_input_add_key_fd(fd,1,mp_input_ps3remote_read,(mp_close_func_t)mp_input_ps3remote_close);
   }
 
   if(in_file) {

@@ -33,6 +33,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <pthread.h>
+#include <sys/inotify.h>
+#include <poll.h>
 
 #include <linux/types.h>
 #include <linux/input.h>
@@ -103,26 +106,20 @@ static const struct {
   { -1,                  -1             }
 };
 
-int mp_input_ps3remote_init (char *dev)
+static struct thread_priv_
 {
-  int i, fd;
+  int fd[2];
+} thread_priv;
 
-  if (dev)
-  {
-    mp_msg (MSGT_INPUT, MSGL_V, "Initializing PS3 BD Remote on %s\n", dev);
-    fd = open (dev, O_RDONLY | O_NONBLOCK);
-    if (fd < 0)
-    {
-      mp_msg (MSGT_INPUT, MSGL_ERR,
-              "Can't open PS3 BD Remote device: %s\n", strerror (errno));
-      return -1;
-    }
+static pthread_t thread_handle;
+static int thread_exit;
+static int thread_exited;
 
-    return fd;
-  }
-  else
-  {
-    /* look for a valid PS3 BD Remote device on system */
+static int scan_ps3_remote(void)
+{
+    int i, fd;
+
+    // look for a valid PS3 BD Remote device on system
     for (i = 0; i < EVDEV_MAX_EVENTS; i++)
     {
       struct input_id id;
@@ -142,16 +139,126 @@ int mp_input_ps3remote_init (char *dev)
         return fd;
       }
       close (fd);
-    }
+   }
 
-    mp_msg (MSGT_INPUT, MSGL_ERR,
-            "Can't open PS3 BD Remote device: %s\n", strerror (errno));
-  }
-
-  return -1;
+   return -1;
 }
 
-int mp_input_ps3remote_read (int fd)
+static void *thread_ps3_remote(void *ptr)
+{
+    struct thread_priv_ *priv = (struct thread_priv_ *)ptr;
+    int inotify_fd = -1, inotify_wd = -1;
+    int input_fd, read_input, write_output;
+    char buf[1000];
+    fd_set set;
+    struct timeval timeout;
+    struct input_event event;
+
+    input_fd = scan_ps3_remote();
+
+    inotify_fd = inotify_init();
+    if (inotify_fd < 0)
+    {
+        perror("Couldn't initialize inotify");
+        goto exit;
+    }
+
+    inotify_wd = inotify_add_watch(inotify_fd, "/dev/input", IN_CREATE | IN_DELETE);
+    if (inotify_wd < 0)
+    {
+        perror("Couldn't add watch to /dev/input ");
+        goto exit;
+    }
+
+    while (thread_exit == 0)
+    {
+        FD_ZERO(&set);
+        FD_SET(inotify_fd, &set);
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 0;
+
+        if (select(inotify_fd + 1, &set, NULL, NULL, &timeout) > 0 &&
+            FD_ISSET(inotify_fd, &set))
+        {
+            read(inotify_fd, buf, 1000);
+            if (input_fd != -1)
+                close(input_fd);
+            input_fd = scan_ps3_remote();
+        }
+
+        while (input_fd != -1)
+        {
+            read_input = read(input_fd, &event, sizeof (struct input_event));
+            if (read_input < 0 && errno != EAGAIN)
+            {
+                close(input_fd);
+                input_fd = -1;
+                break;
+            }
+            if (read_input < (int)sizeof (struct input_event))
+            {
+                break;
+            }
+            write_output = write(thread_priv.fd[1], &event, sizeof (struct input_event));
+            if (write_output != sizeof (struct input_event))
+            {
+                perror("Couldn't write to output pipe\n");
+                break;
+            }
+        }
+
+        usleep(10000);
+    }
+
+exit:
+    if (inotify_wd != -1)
+        inotify_rm_watch(inotify_fd, inotify_wd);
+    if (inotify_fd != -1)
+        close(inotify_fd);
+    if (input_fd != -1)
+        close(input_fd);
+
+    thread_exited = 1;
+    return NULL;
+}
+
+int mp_input_ps3remote_init()
+{
+    thread_exit = 0;
+    thread_exited = 0;
+
+    if (pipe(thread_priv.fd) != 0)
+    {
+        return -1;
+    }
+
+    if (pthread_create(&thread_handle, NULL, thread_ps3_remote, (void *)&thread_priv) != 0)
+    {
+        close(thread_priv.fd[0]);
+        close(thread_priv.fd[1]);
+        return -1;
+    }
+
+    return thread_priv.fd[0];
+}
+
+void mp_input_ps3remote_close(int fd)
+{
+    void *result;
+    int status;
+
+    thread_exit = 1;
+
+    while (!thread_exited) {}
+
+    close(thread_priv.fd[0]);
+    close(thread_priv.fd[1]);
+
+    thread_exit = 0;
+    thread_exited = 0;
+}
+
+int mp_input_ps3remote_read(int fd)
 {
   struct input_event ev;
   int i, r;
@@ -171,7 +278,7 @@ int mp_input_ps3remote_read (int fd)
   if (ev.value == 0)
     return MP_INPUT_NOTHING;
 
-//printf("%d\n\n", ev.code);
+  //printf("%d\n\n", ev.code);
 
   /* find Linux evdev -> MPlayer keycode mapping */
   for (i = 0; ps3remote_mapping[i].linux_keycode != -1; i++)
