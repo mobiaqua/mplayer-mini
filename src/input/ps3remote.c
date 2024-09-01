@@ -212,11 +212,20 @@ static void *thread_ps3_remote(void *ptr)
 
 exit:
     if (inotify_wd != -1)
+    {
         inotify_rm_watch(inotify_fd, inotify_wd);
+        inotify_wd = -1;
+    }
     if (inotify_fd != -1)
+    {
         close(inotify_fd);
+        inotify_fd = -1;
+    }
     if (input_fd != -1)
+    {
         close(input_fd);
+        input_fd = -1;
+    }
 
     thread_exited = 1;
     return NULL;
@@ -249,7 +258,7 @@ void mp_input_ps3remote_close(int fd)
 
     thread_exit = 1;
 
-    while (!thread_exited) {}
+    while (!thread_exited) { usleep(10000); }
 
     close(thread_priv.fd[0]);
     close(thread_priv.fd[1]);
